@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EventTouch, Vec3 } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Animation } from 'cc';
 import { BallCtrl } from './BallCtrl';
 const { ccclass, property } = _decorator;
 
@@ -35,6 +35,17 @@ export class GameCtrl extends Component {
         this.controlButton.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
         this.controlButton.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
         this.controlButton.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
+
+        this.playPaddleSpawn();
+    }
+
+    public playPaddleSpawn() {
+        if (this.paddle) {
+            const anim = this.paddle.getComponent(Animation);
+            if (anim) {
+                anim.play('PaddleSpawn'); 
+            }
+        }
     }
 
     private onTouchMove(event: EventTouch) {

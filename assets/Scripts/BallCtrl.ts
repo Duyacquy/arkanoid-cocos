@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, RigidBody2D, Vec2, Vec3 } from 'cc';
+import { _decorator, Component, Node, RigidBody2D, Vec2, Vec3, UITransform } from 'cc'; // Thêm UITransform
 const { ccclass, property } = _decorator;
 
 @ccclass('BallCtrl')
@@ -7,19 +7,52 @@ export class BallCtrl extends Component {
     @property(Node)
     public paddle: Node = null!;
 
+    @property(Node)
+    public playZone: Node = null!; 
+
     @property
     public ballSpeed: number = 500; 
 
     private rb: RigidBody2D = null!;
     private isLaunched: boolean = false;
-    private offsetFromPaddle: Vec3 = new Vec3(0, 35, 0); // Khoảng cách bóng nằm trên paddle
+    private offsetFromPaddle: Vec3 = new Vec3(0, 35, 0);
+
+    private minPlayX: number = 0;
+    private maxPlayX: number = 0;
+    private maxPlayY: number = 0;
+    private minPlayY: number = 0;
 
     onLoad() {
         this.rb = this.getComponent(RigidBody2D)!;
     }
 
     start() {
+        this.calculateBoundsFromZone();
         this.resetBall();
+    }
+
+    private calculateBoundsFromZone() {
+        if (!this.playZone) {
+            console.warn("Chưa kéo thả Node PlayZone vào BallCtrl!");
+            return;
+        }
+
+        const uiTransform = this.playZone.getComponent(UITransform);
+        if (uiTransform) {
+            const zoneWidth = uiTransform.contentSize.width;
+            const zoneHeight = uiTransform.contentSize.height;
+
+            console.log(zoneWidth);
+            console.log(zoneHeight);
+
+            const ballRadius = 15;
+
+            this.minPlayX = -zoneWidth / 2 + ballRadius;
+            this.maxPlayX = zoneWidth / 2 - ballRadius;
+            this.maxPlayY = zoneHeight / 2 - ballRadius + 100 ;
+            
+            this.minPlayY = -zoneHeight / 2 + 50; 
+        }
     }
 
     update(dt: number) {
@@ -29,9 +62,41 @@ export class BallCtrl extends Component {
             this.node.setPosition(paddlePos.add(this.offsetFromPaddle));
         }
 
-        // Nếu bóng rơi xuống dưới biên màn hình -> Reset
-        if (this.node.getPosition().y < -600) {
+        // Nếu bóng rơi xuống dưới biên màn hình -> Reset (Dùng biến động)
+        if (this.node.getPosition().y < this.minPlayY) {
             this.resetBall();
+        }
+
+        // "Nhốt" bóng trong vùng chơi Responsive
+        if (this.isLaunched && this.rb) {
+            let currentPos = this.node.getPosition();
+            let velocity = this.rb.linearVelocity;
+            let changed = false;
+
+            // Kiểm tra biên trái
+            if (currentPos.x < this.minPlayX) {
+                currentPos.x = this.minPlayX;
+                velocity.x = Math.abs(velocity.x); // Nảy sang phải
+                changed = true;
+            }
+            // Kiểm tra biên phải
+            else if (currentPos.x > this.maxPlayX) {
+                currentPos.x = this.maxPlayX;
+                velocity.x = -Math.abs(velocity.x); // Nảy sang trái
+                changed = true;
+            }
+
+            // Kiểm tra biên trên
+            if (currentPos.y > this.maxPlayY) {
+                currentPos.y = this.maxPlayY;
+                velocity.y = -Math.abs(velocity.y); // Nảy xuống
+                changed = true;
+            }
+
+            if (changed) {
+                this.node.setPosition(currentPos);
+                this.rb.linearVelocity = velocity;
+            }
         }
     }
 
