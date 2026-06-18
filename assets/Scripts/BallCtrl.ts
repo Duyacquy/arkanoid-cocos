@@ -15,7 +15,7 @@ export class BallCtrl extends Component {
 
     private rb: RigidBody2D = null!;
     private isLaunched: boolean = false;
-    private offsetFromPaddle: Vec3 = new Vec3(0, 35, 0);
+    private offsetFromPaddle: Vec3 = new Vec3(0, 40, 0);
 
     private minPlayX: number = 0;
     private maxPlayX: number = 0;
@@ -42,16 +42,13 @@ export class BallCtrl extends Component {
             const zoneWidth = uiTransform.contentSize.width;
             const zoneHeight = uiTransform.contentSize.height;
 
-            console.log(zoneWidth);
-            console.log(zoneHeight);
-
             const ballRadius = 15;
 
             this.minPlayX = -zoneWidth / 2 + ballRadius;
             this.maxPlayX = zoneWidth / 2 - ballRadius;
-            this.maxPlayY = zoneHeight / 2 - ballRadius + 100 ;
+            this.maxPlayY = zoneHeight / 2 - ballRadius;
             
-            this.minPlayY = -zoneHeight / 2 + 50; 
+            this.minPlayY = -zoneHeight / 2 + 300; 
         }
     }
 
