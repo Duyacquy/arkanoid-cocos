@@ -1,3 +1,14 @@
 {
-  "__version__": "1.0.6"
+  "__version__": "1.0.6",
+  "general": {
+    "designResolution": {
+      "width": 1080,
+      "height": 1920
+    }
+  },
+  "physics": {
+    "collisionMatrix": {
+      "0": 1
+    }
+  }
 }
