@@ -1,5 +1,6 @@
 import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, PhysicsSystem2D } from 'cc';
 import { BrickCtrl } from './BrickCtrl';
+import { GameCtrl } from './GameCtrl';
 const { ccclass, property } = _decorator;
 
 @ccclass('LevelManager')
@@ -11,32 +12,35 @@ export class LevelManager extends Component {
     @property(Node)
     public brickContainer: Node = null!; 
 
-//    private levelData: number[][] = [
-//         [0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0],
-//         [1, 1, 4, 4, 0, 0, 0, 4, 4, 1, 1],
-//         [1, 4, 4, 4, 4, 0, 4, 4, 4, 4, 1],
-//         [1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1],
-//         [1, 4, 4, 3, 3, 4, 3, 3, 4, 4, 1],
-//         [1, 4, 4, 3, 3, 4, 3, 3, 4, 4, 1],
-//         [1, 1, 4, 4, 4, 4, 4, 4, 4, 1, 1],
-//         [0, 1, 1, 4, 4, 4, 4, 4, 1, 1, 0],
-//         [0, 0, 1, 1, 4, 4, 4, 1, 1, 0, 0],
-//         [0, 0, 0, 1, 1, 4, 1, 1, 0, 0, 0],
-//         [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-//         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-//     ];
+    @property(GameCtrl)
+    public gameCtrl: GameCtrl = null!;
 
     private levelData: number[][] = [
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0],
+        [1, 1, 4, 4, 0, 0, 0, 4, 4, 1, 1],
+        [1, 4, 4, 4, 4, 0, 4, 4, 4, 4, 1],
+        [1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1],
+        [1, 4, 4, 3, 3, 4, 3, 3, 4, 4, 1],
+        [1, 4, 4, 3, 3, 4, 3, 3, 4, 4, 1],
+        [1, 1, 4, 4, 4, 4, 4, 4, 4, 1, 1],
+        [0, 1, 1, 4, 4, 4, 4, 4, 1, 1, 0],
+        [0, 0, 1, 1, 4, 4, 4, 1, 1, 0, 0],
+        [0, 0, 0, 1, 1, 4, 1, 1, 0, 0, 0],
+        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
     ];
+
+    // private levelData: number[][] = [
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    // ];
 
     private brickWidth: number = 70;
     private brickHeight: number = 35;
@@ -83,6 +87,9 @@ export class LevelManager extends Component {
                 const brickCtrl = brickNode.getComponent(BrickCtrl);
                 if (brickCtrl) {
                     brickCtrl.initBrick(brickType, this.brickWidth, this.brickHeight);
+                    
+                    // 3. TRUYỀN LIÊN KẾT GAMECTRL SANG CHO VIÊN GẠCH Ở ĐÂY
+                    brickCtrl.setGameCtrl(this.gameCtrl);
                 }
             }
         }
