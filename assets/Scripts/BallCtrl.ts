@@ -15,7 +15,7 @@ export class BallCtrl extends Component {
 
     private rb: RigidBody2D = null!;
     private isLaunched: boolean = false;
-    private offsetFromPaddle: Vec3 = new Vec3(0, 35, 0);
+    private offsetFromPaddle: Vec3 = new Vec3(0, 45, 0);
 
     private minPlayX: number = 0;
     private maxPlayX: number = 0;
