@@ -74,16 +74,17 @@ export class GameCtrl extends Component {
 
     // 1. Tạo ra 3 quả bóng ở 3 phía
     private handleDuplicateBall() {
-        if (!this.ballCtrl) return;
+        // if (!this.ballCtrl) return;
         
-        const currentBallNode = this.ballCtrl.node;
-        const currentVelocity = this.ballCtrl.getComponent(cc.RigidBody2D)!.linearVelocity;
+        // const currentBallNode = this.ballCtrl.node;
+        // const currentVelocity = this.ballCtrl.getComponent(cc.RigidBody2D)!.linearVelocity;
 
-        // Tạo thêm quả bóng số 2 (lệch trái 30 độ)
-        this.spawnExtraBall(currentBallNode.getPosition(), new cc.Vec2(currentVelocity.x - 150, currentVelocity.y));
+        // // Tạo thêm quả bóng số 2 (lệch trái 30 độ)
+        // this.spawnExtraBall(currentBallNode.getPosition(), new cc.Vec2(currentVelocity.x - 150, currentVelocity.y));
         
-        // Tạo thêm quả bóng số 3 (lệch phải 30 độ)
-        this.spawnExtraBall(currentBallNode.getPosition(), new cc.Vec2(currentVelocity.x + 150, currentVelocity.y));
+        // // Tạo thêm quả bóng số 3 (lệch phải 30 độ)
+        // this.spawnExtraBall(currentBallNode.getPosition(), new cc.Vec2(currentVelocity.x + 150, currentVelocity.y));
+        console.log("Phân thân chi thuật");
     }
 
     private spawnExtraBall(position: cc.Vec3, velocity: cc.Vec2) {
@@ -102,54 +103,53 @@ export class GameCtrl extends Component {
 
     // 2. Mở rộng kích thước Paddle
     private handleExpandPaddle() {
-        if (!this.paddle) return;
-        const uiTransform = this.paddle.getComponent(cc.UITransform);
-        if (uiTransform) {
-            const originalWidth = uiTransform.contentSize.width;
-            uiTransform.setContentSize(originalWidth * 1.5, uiTransform.contentSize.height);
+        // if (!this.paddle) return;
+        // const uiTransform = this.paddle.getComponent(cc.UITransform);
+        // if (uiTransform) {
+        //     const originalWidth = uiTransform.contentSize.width;
+        //     uiTransform.setContentSize(originalWidth * 1.5, uiTransform.contentSize.height);
             
-            // Cập nhật lại BoxCollider2D của Paddle nếu có để va chạm chuẩn xác hơn
-            const collider = this.paddle.getComponent(cc.BoxCollider2D);
-            if (collider) {
-                collider.size.width = originalWidth * 1.5;
-                collider.apply();
-            }
+        //     // Cập nhật lại BoxCollider2D của Paddle nếu có để va chạm chuẩn xác hơn
+        //     const collider = this.paddle.getComponent(cc.BoxCollider2D);
+        //     if (collider) {
+        //         collider.size.width = originalWidth * 1.5;
+        //         collider.apply();
+        //     }
 
-            // Sau 10 giây quay về kích thước cũ
-            this.scheduleOnce(() => {
-                uiTransform.setContentSize(originalWidth, uiTransform.contentSize.height);
-                if (collider) {
-                    collider.size.width = originalWidth;
-                    collider.apply();
-                }
-            }, 10);
-        }
+        //     // Sau 10 giây quay về kích thước cũ
+        //     this.scheduleOnce(() => {
+        //         uiTransform.setContentSize(originalWidth, uiTransform.contentSize.height);
+        //         if (collider) {
+        //             collider.size.width = originalWidth;
+        //             collider.apply();
+        //         }
+        //     }, 10);
+        // }
+        console.log("Bành trướng lãnh địa");
     }
 
     // 3. Làm chậm bóng
     private handleSlowBall() {
-        // Tìm tất cả các quả bóng đang có trong bàn chơi và giảm speed
-        const balls = this.node.parent?.addComponent(cc.Canvas).node.getComponentsInChildren(BallCtrl); 
-        // Hoặc quản lý mảng bóng riêng. Tạm thời chỉnh quả bóng chính:
-        if (this.ballCtrl) {
-            const rb = this.ballCtrl.getComponent(cc.RigidBody2D);
-            if (rb) {
-                rb.linearVelocity = rb.linearVelocity.multiplyScalar(0.5); // Giảm nửa tốc độ
+        // // Tìm tất cả các quả bóng đang có trong bàn chơi và giảm speed
+        // const balls = this.node.parent?.addComponent(cc.Canvas).node.getComponentsInChildren(BallCtrl); 
+        // // Hoặc quản lý mảng bóng riêng. Tạm thời chỉnh quả bóng chính:
+        // if (this.ballCtrl) {
+        //     const rb = this.ballCtrl.getComponent(cc.RigidBody2D);
+        //     if (rb) {
+        //         rb.linearVelocity = rb.linearVelocity.multiplyScalar(0.5); // Giảm nửa tốc độ
                 
-                // Sau 5 giây hồi phục lại tốc độ cũ
-                this.scheduleOnce(() => {
-                    rb.linearVelocity = rb.linearVelocity.multiplyScalar(2);
-                }, 5);
-            }
-        }
+        //         // Sau 5 giây hồi phục lại tốc độ cũ
+        //         this.scheduleOnce(() => {
+        //             rb.linearVelocity = rb.linearVelocity.multiplyScalar(2);
+        //         }, 5);
+        //     }
+        // }
+        console.log("Bóng chạy chậm!");
     }
 
     // 4. Bắn Lazer từ Paddle
     private handleLaserActive() {
-        // Tính năng này bạn cần làm thêm một Prefab đạn Lazer.
-        // Cứ mỗi 0.5 giây tự động sinh ra 2 tia lazer ở 2 rìa Paddle bay thẳng lên trên.
         console.log("Paddle đang bắn Laser!");
-        // Bạn có thể dùng hàm schedule để bắn liên tục trong 5 giây.
     }
 
     private onTouchMove(event: EventTouch) {

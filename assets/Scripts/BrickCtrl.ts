@@ -83,20 +83,22 @@ export class BrickCtrl extends Component {
 
     private spawnPowerUp() {
         if (Math.random() > 0.2) return; 
-    
+
         if (!this.powerUpPrefab) return;
-    
+
         const powerUpNode = instantiate(this.powerUpPrefab);
-        powerUpNode.parent = this.node.parent?.parent; 
+        
+        // SỬA TẠI ĐÂY: Cho PowerUp làm con trực tiếp của BrickContainer (chung cha với viên gạch)
+        powerUpNode.parent = this.node.parent; 
+        
+        // Bây giờ lấy tọa độ này gán sang sẽ chính xác hoàn toàn vị trí viên gạch vừa vỡ
         powerUpNode.setPosition(this.node.getPosition());
-    
-        // Chọn ngẫu nhiên 1 trong 4 loại thuốc
+
         const types = [PowerUpType.DUPLICATE, PowerUpType.EXPAND, PowerUpType.LASER, PowerUpType.SLOW];
         const randomType = types[Math.floor(Math.random() * types.length)];
-    
+
         const ctrl = powerUpNode.getComponent(PowerUpCtrl);
         if (ctrl) {
-            // Tìm GameCtrl trong scene để truyền vào (hoặc truyền qua LevelManager lúc tạo gạch)
             ctrl.initPowerUp(randomType, this.gameCtrl);
         }
     }

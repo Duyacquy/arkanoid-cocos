@@ -45,7 +45,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": -2.6860000000000355,
-      "y": -270.0000000000001,
+      "y": -270,
       "z": 0
     },
     "_lrot": {
@@ -196,7 +196,7 @@
     "bullet": false,
     "awakeOnLoad": true,
     "_group": 1,
-    "_type": 2,
+    "_type": 0,
     "_allowSleep": true,
     "_gravityScale": 0,
     "_linearDamping": 0,
