@@ -20,9 +20,6 @@ export class GameCtrl extends Component {
     @property(BallCtrl)
     public ballCtrl: BallCtrl = null!;
 
-    @property(Prefab)
-    public ballPrefab: Prefab = null!;
-
     @property(LevelManager)
     public levelManager: LevelManager = null!;
 
@@ -34,8 +31,8 @@ export class GameCtrl extends Component {
     private paddleBuffToken: number = 0;
 
     // Quản lý trạng thái Buff làm chậm bóng 
+    private ballSlowScale: number = 0.7;
     private ballSlowToken: number = 0;
-    private resetPaddleSize: Function = null!;
     private resetBallSpeed: Function = null!;
     private isBallSlowed: boolean = false;
 
@@ -122,7 +119,11 @@ export class GameCtrl extends Component {
 
     public refreshActiveBalls() {
         if (this.ballCtrl && this.ballCtrl.node.parent) {
-            const ballNodes = this.ballCtrl.node.parent.children.filter(child => child.getComponent(BallCtrl) !== null);
+            const ballNodes = this.ballCtrl.node.parent.children.filter(child => {
+                const ctrl = child.getComponent(BallCtrl);
+                return ctrl !== null && child.isValid && child.activeInHierarchy;
+            });
+            
             this.activeBalls = ballNodes;
         }
     }
@@ -132,8 +133,10 @@ export class GameCtrl extends Component {
         
         switch (type) {
             case PowerUpType.DUPLICATE:
-                if (this.activeBalls.length > 0 && this.ballPrefab) {
-                    PowerUpManager.handleDuplicateBall(this.activeBalls[0], this.ballPrefab);
+                this.refreshActiveBalls();
+                if (this.activeBalls.length > 0) {
+                    const sourceBall = this.activeBalls[0]; 
+                    PowerUpManager.handleDuplicateBall(sourceBall);
                     this.refreshActiveBalls();
                 }
                 break;
@@ -165,7 +168,7 @@ export class GameCtrl extends Component {
         
                 if (!this.isBallSlowed) {
                     this.isBallSlowed = true;
-                    PowerUpManager.handleSlowBalls(this.activeBalls, 0.7); 
+                    PowerUpManager.handleSlowBalls(this.activeBalls, this.ballSlowScale); 
                     console.log("Bóng bắt đầu chạy chậm.");
                 } else {
                     console.log("Bóng đang chậm sẵn rồi, chỉ reset lại thời gian đếm ngược 5 giây!");
@@ -180,7 +183,7 @@ export class GameCtrl extends Component {
                         this.refreshActiveBalls();
                         
                         // Trả lại tốc độ gốc và gỡ cờ trạng thái chậm
-                        PowerUpManager.handleSlowBalls(this.activeBalls, 2); // Nhân đôi để về ban đầu
+                        PowerUpManager.handleSlowBalls(this.activeBalls, 1.0 / this.ballSlowScale); // Nhân đôi để về ban đầu
                         this.isBallSlowed = false; 
                         
                         console.log("Hết thời gian làm chậm! Bóng tăng tốc trở lại.");
@@ -191,17 +194,21 @@ export class GameCtrl extends Component {
     }
 
     public handleBallLost(ballNode: Node) {
+        // 1. Loại bỏ ngay lập tức Node bóng này ra khỏi mảng activeBalls (xóa Real-time)
         const index = this.activeBalls.indexOf(ballNode);
         if (index > -1) {
             this.activeBalls.splice(index, 1);
         }
-
+    
+        // 2. Xử lý ẩn/hủy Node
         if (ballNode !== this.ballCtrl.node) {
-            ballNode.destroy();
+            ballNode.destroy(); 
         } else {
             ballNode.active = false; 
         }
-
+    
+        this.refreshActiveBalls();
+    
         if (this.activeBalls.length === 0) {
             console.log("Hết sạch bóng! Bạn đã mất 1 mạng.");
             
@@ -209,7 +216,6 @@ export class GameCtrl extends Component {
             this.ballCtrl.resetBall();
             this.activeBalls.push(this.ballCtrl.node);
             
-            // Cập nhật lại biên chuẩn cho Paddle lúc hồi sinh phòng hờ khi đang còn kích thước buff
             const paddleTransform = this.paddle.getComponent(UITransform);
             if (paddleTransform) {
                 this.updatePaddleBounds(paddleTransform.width);

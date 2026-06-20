@@ -43,18 +43,19 @@ export class BallCtrl extends Component {
 
     /** Hàm khởi tạo đặc biệt dành riêng cho bóng phụ khi phân thân */
     public initExtraBall(parent: Node, pos: Vec3, vel: Vec3, speed: number) {
-        // 1. ÉP CỜ TRƯỚC: Bật true ngay để chặn họng hàm start() và update() của Engine
+        // 1. GÁN CHA TRƯỚC để xác định hệ tọa độ Local
+        this.node.parent = parent;
+    
+        // 2. BẬT CỜ để không bị dính vào logic update bám Paddle
         this.isLaunched = true;
         this.ballSpeed = speed;
         this.setVelocity(vel);
-
-        // 2. GÁN CHA SAU: Đưa vào Scene (Lúc này start() chạy sẽ an toàn vì isLaunched đã bằng true)
-        this.node.parent = parent;
-        
-        // 3. ĐẶT VỊ TRÍ CUỐI CÙNG: Lúc này hệ tọa độ đã vững chắc, setPosition ăn chuẩn 100% tại vị trí bóng gốc
+    
+        // 3. ĐẶT VỊ TRÍ CUỐI CÙNG (Trùng khớp 100% vị trí bóng gốc tại frame đó)
         this.node.setPosition(pos.clone());
-        
-        console.log("Đã kích hoạt bóng phụ thành công tại vị trí:", pos.toString());
+        console.log(pos);
+        // Đảm bảo bóng phụ hiển thị lên bình thường
+        this.node.active = true; 
     }
 
     private calculateBoundsFromZone() {
@@ -118,7 +119,7 @@ export class BallCtrl extends Component {
             this.checkBricksCollision();
 
             // 5. Kiểm tra rớt đáy (Thua mạng)
-            if (this.node.position.y < this.minPlayY + 20) {
+            if (this.node.position.y < this.minPlayY + 300) {
                 if (this.gameCtrl && this.gameCtrl.handleBallLost) {
                     this.gameCtrl.handleBallLost(this.node);
                 }

@@ -55,7 +55,7 @@ export class BrickCtrl extends Component {
         powerUpNode.setPosition(this.node.getPosition());
 
         // const types = [PowerUpType.DUPLICATE, PowerUpType.EXPAND, PowerUpType.SLOW];
-        const types = [PowerUpType.SLOW];
+        const types = [PowerUpType.DUPLICATE];
         const randomType = types[Math.floor(Math.random() * types.length)];
 
         const ctrl = powerUpNode.getComponent(PowerUpCtrl);

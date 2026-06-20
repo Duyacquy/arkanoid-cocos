@@ -1,13 +1,13 @@
-import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, tween } from 'cc';
+import { _decorator, Node, instantiate, Vec3, UITransform, tween } from 'cc';
 import { BallCtrl } from './BallCtrl';
 
 export class PowerUpManager {
-    /** * Xử lý kỹ năng Phân thân quả bóng hiện tại thành 3 quả 
-     * @param currentBall Quả bóng chính hoặc quả bóng vừa kích hoạt item
-     * @param ballPrefab Prefab của quả bóng để dùng cho việc clone
+    /**
+     * Xử lý kỹ năng Phân thân quả bóng hiện tại thành 3 quả (Không dùng Prefab)
+     * @param currentBall Quả bóng gốc đang bay trên sân
      */
-    public static handleDuplicateBall(currentBall: Node, ballPrefab: Prefab) {
-        if (!currentBall || !ballPrefab) return;
+    public static handleDuplicateBall(currentBall: Node) {
+        if (!currentBall) return;
 
         const ballCtrl = currentBall.getComponent(BallCtrl);
         if (!ballCtrl) return;
@@ -34,29 +34,28 @@ export class PowerUpManager {
             0
         );
 
-        this.spawnExtraBall(currentBall.parent!, ballPrefab, startPos, vel1, ballCtrl.ballSpeed);
-        this.spawnExtraBall(currentBall.parent!, ballPrefab, startPos, vel2, ballCtrl.ballSpeed);
+        // Truyền thẳng Node gốc currentBall vào làm mẫu để sao chép visual
+        this.spawnExtraBall(currentBall.parent!, currentBall, startPos, vel1, ballCtrl.ballSpeed);
+        this.spawnExtraBall(currentBall.parent!, currentBall, startPos, vel2, ballCtrl.ballSpeed);
     }
 
-    private static spawnExtraBall(parent: Node, prefab: Prefab, pos: Vec3, vel: Vec3, speed: number) {
-        const extraBallNode = instantiate(prefab);
+    private static spawnExtraBall(parent: Node, sampleBallNode: Node, pos: Vec3, vel: Vec3, speed: number) {
+        // CLONE CHÍNH NODE BÓNG TRÊN SÂN
+        const extraBallNode = instantiate(sampleBallNode); 
         const ctrl = extraBallNode.getComponent(BallCtrl);
         
         if (ctrl) {
-            // Sao chép liên kết Scene Object giống như cũ
-            const mainBallNode = parent.children.find(child => child.name === 'Ball' && child !== extraBallNode);
-            if (mainBallNode) {
-                const mainBallCtrl = mainBallNode.getComponent(BallCtrl);
-                if (mainBallCtrl) {
-                    ctrl.paddle = mainBallCtrl.paddle;
-                    ctrl.playZone = mainBallCtrl.playZone;
-                    if (mainBallCtrl['gameCtrl']) {
-                        ctrl.setGameCtrl(mainBallCtrl['gameCtrl']);
-                    }
+            // Sao chép các liên kết GameCtrl, Paddle giống bóng gốc
+            const mainBallCtrl = sampleBallNode.getComponent(BallCtrl);
+            if (mainBallCtrl) {
+                ctrl.paddle = mainBallCtrl.paddle;
+                ctrl.playZone = mainBallCtrl.playZone;
+                if (mainBallCtrl['gameCtrl']) {
+                    ctrl.setGameCtrl(mainBallCtrl['gameCtrl']);
                 }
             }
 
-            // GỌI HÀM KHỞI TẠO ĐỒNG BỘ MỚI TẠI ĐÂY
+            // Kích hoạt nạp dữ liệu di chuyển cho bóng phụ
             ctrl.initExtraBall(parent, pos, vel, speed);
         }
     }
