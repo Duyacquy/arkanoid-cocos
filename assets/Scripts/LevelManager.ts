@@ -1,6 +1,7 @@
-import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, PhysicsSystem2D } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform } from 'cc';
 import { BrickCtrl } from './BrickCtrl';
 import { GameCtrl } from './GameCtrl';
+
 const { ccclass, property } = _decorator;
 
 @ccclass('LevelManager')
@@ -15,6 +16,7 @@ export class LevelManager extends Component {
     @property(GameCtrl)
     public gameCtrl: GameCtrl = null!;
 
+    // --- MA TRẬN 1: MÀN CHƠI KIỂU TRUYỀN THỐNG (MÀU SẮC ĐA DẠNG) ---
     // private levelData: number[][] = [
     //     [0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0],
     //     [1, 1, 4, 4, 0, 0, 0, 4, 4, 1, 1],
@@ -30,28 +32,17 @@ export class LevelManager extends Component {
     //     [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
     // ];
 
-    // private levelData: number[][] = [
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    // ];
-
+    // --- MA TRẬN 3: MÀN CHƠI FULL GẠCH VÀNG (MẶC ĐỊNH ĐANG BẬT) ---
     private levelData: number[][] = [
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
-        [3, 3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
+        [3, 3, 3, 3, 3, 3, 3, 3],
     ];
 
     private brickWidth: number = 70;
@@ -64,48 +55,53 @@ export class LevelManager extends Component {
     }
 
     public generateLevel() {
-        // 1. Xóa sạch gạch cũ nếu có
         this.brickContainer.removeAllChildren();
 
         const rowCount = this.levelData.length;
         const colCount = this.levelData[0].length;
 
-        // 2. Tính toán startX để toàn bộ cụm gạch nằm CĂN GIỮA theo chiều ngang (Trục X)
         const totalWidth = colCount * this.brickWidth + (colCount - 1) * this.spacingX;
+        const totalHeight = rowCount * this.brickHeight + (rowCount - 1) * this.spacingY;
+
         const startX = -totalWidth / 2 + this.brickWidth / 2;
 
-        // 3. Vì Tâm Y của brickContainer là 1 (ở đỉnh), hàng đầu tiên sẽ lùi xuống nửa chiều cao gạch
-        const startY = -this.brickHeight / 2;
+        let startY = 0;
+        
+        const zoneTransform = this.brickContainer.parent?.getComponent(UITransform);
+        
+        if (zoneTransform) {
+            const zoneHeight = zoneTransform.contentSize.height;
+            
+            const topEdge = zoneHeight / 2;
+            
+            const marginTop = 250; 
+            
+            startY = topEdge - marginTop - this.brickHeight / 2;
+        } else {
+            const topOffset = 350; 
+            startY = topOffset + (totalHeight / 2) - this.brickHeight / 2;
+        }
 
-        // 4. Vòng lặp sinh gạch
         for (let row = 0; row < rowCount; row++) {
             for (let col = 0; col < colCount; col++) {
                 const brickType = this.levelData[row][col];
 
-                // Nếu là số 0 thì bỏ qua không sinh gạch
                 if (brickType === 0) continue;
 
-                // Tạo Node gạch từ Prefab và bỏ vào Container
                 const brickNode = instantiate(this.brickPrefab);
                 brickNode.parent = this.brickContainer;
 
-                // Tính toán tọa độ Local tương đối
                 const posX = startX + col * (this.brickWidth + this.spacingX);
-                const posY = startY - row * (this.brickHeight + this.spacingY); // Trừ đi Y để xếp thấp dần xuống dưới
+                const posY = startY - row * (this.brickHeight + this.spacingY);
                 
                 brickNode.setPosition(new Vec3(posX, posY, 0));
 
-                // Khởi tạo thuộc tính máu, ảnh cho gạch
                 const brickCtrl = brickNode.getComponent(BrickCtrl);
                 if (brickCtrl) {
                     brickCtrl.initBrick(brickType, this.brickWidth, this.brickHeight);
-                    
-                    // 3. TRUYỀN LIÊN KẾT GAMECTRL SANG CHO VIÊN GẠCH Ở ĐÂY
                     brickCtrl.setGameCtrl(this.gameCtrl);
                 }
             }
         }
-
-        PhysicsSystem2D.instance.syncSceneToPhysics();
     }
 }

@@ -28,21 +28,15 @@
       },
       {
         "__id__": 6
-      },
-      {
-        "__id__": 8
-      },
-      {
-        "__id__": 10
       }
     ],
     "_prefab": {
-      "__id__": 12
+      "__id__": 8
     },
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 417.4999999999999,
+      "y": 402.4999999999998,
       "z": 0
     },
     "_lrot": {
@@ -139,40 +133,6 @@
     "fileId": "49XOM1sdlLpalf1U2nwabI"
   },
   {
-    "__type__": "cc.BoxCollider2D",
-    "_name": "",
-    "_objFlags": 0,
-    "__editorExtras__": {},
-    "node": {
-      "__id__": 1
-    },
-    "_enabled": true,
-    "__prefab": {
-      "__id__": 7
-    },
-    "tag": 0,
-    "_group": 1,
-    "_density": 1,
-    "_sensor": false,
-    "_friction": 0,
-    "_restitution": 1,
-    "_offset": {
-      "__type__": "cc.Vec2",
-      "x": 0,
-      "y": 0
-    },
-    "_size": {
-      "__type__": "cc.Size",
-      "width": 70,
-      "height": 35
-    },
-    "_id": ""
-  },
-  {
-    "__type__": "cc.CompPrefabInfo",
-    "fileId": "69U4dI+DxMlKv2rJL5K2ux"
-  },
-  {
     "__type__": "48b7ccop1pCpaNuqIk9kPuJ",
     "_name": "",
     "_objFlags": 0,
@@ -182,7 +142,7 @@
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 9
+      "__id__": 7
     },
     "powerUpPrefab": {
       "__uuid__": "678bab71-7968-478a-9f4e-87caca7481fe",
@@ -215,40 +175,6 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "9eQ87FQJJGk7cnzA7iC/DV"
-  },
-  {
-    "__type__": "cc.RigidBody2D",
-    "_name": "",
-    "_objFlags": 0,
-    "__editorExtras__": {},
-    "node": {
-      "__id__": 1
-    },
-    "_enabled": true,
-    "__prefab": {
-      "__id__": 11
-    },
-    "enabledContactListener": true,
-    "bullet": false,
-    "awakeOnLoad": true,
-    "_group": 1,
-    "_type": 0,
-    "_allowSleep": true,
-    "_gravityScale": 1,
-    "_linearDamping": 0,
-    "_angularDamping": 0,
-    "_linearVelocity": {
-      "__type__": "cc.Vec2",
-      "x": 0,
-      "y": 0
-    },
-    "_angularVelocity": 0,
-    "_fixedRotation": false,
-    "_id": ""
-  },
-  {
-    "__type__": "cc.CompPrefabInfo",
-    "fileId": "8c1/ZrpJFBt5HANgUS6hhi"
   },
   {
     "__type__": "cc.PrefabInfo",

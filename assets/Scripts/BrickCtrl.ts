@@ -1,16 +1,9 @@
-import { _decorator, Component, Sprite, SpriteFrame, Collider2D, Contact2DType, IPhysics2DContact, UITransform, BoxCollider2D, Prefab, instantiate, Node } from 'cc';
-import { BallCtrl } from './BallCtrl'; 
+import { _decorator, Component, Sprite, SpriteFrame, UITransform, Prefab, instantiate, Node } from 'cc';
 import { PowerUpCtrl, PowerUpType } from './PowerUpCtrl';
 
 const { ccclass, property } = _decorator;
 
-export enum BrickType {
-    SILVER = 1,
-    GREEN = 2,
-    CYAN = 3,
-    RED = 4,
-    YELLOW = 5
-}
+export enum BrickType { SILVER = 1, GREEN = 2, CYAN = 3, RED = 4, YELLOW = 5 }
 
 @ccclass('BrickCtrl')
 export class BrickCtrl extends Component {
@@ -28,19 +21,8 @@ export class BrickCtrl extends Component {
         this.gameCtrl = gameCtrl;
     }
 
-    start() {
-        // Đăng ký lắng nghe sự kiện va chạm
-        const collider = this.getComponent(Collider2D);
-        if (collider) {
-            collider.on(Contact2DType.BEGIN_CONTACT, this.onBeginContact, this);
-        }
-    }
-
-    // Hàm thiết lập loại gạch VÀ kích thước chuẩn Responsive
     public initBrick(type: BrickType, width: number, height: number) {
         this.currentType = type;
-        
-        // Thiết lập HP: Silver = 2, còn lại = 1
         this.hp = (type === BrickType.SILVER) ? 2 : 1;
 
         const sprite = this.getComponent(Sprite);
@@ -53,48 +35,27 @@ export class BrickCtrl extends Component {
         if (uiTransform) {
             uiTransform.setContentSize(width, height);
         }
-
-        const boxCollider = this.getComponent(BoxCollider2D);
-        if (boxCollider) {
-            boxCollider.size.width = width;
-            boxCollider.size.height = height;
-            boxCollider.offset.set(0, 0); 
-            boxCollider.apply();
-        }
     }
 
-    // Xử lý va chạm
-    private onBeginContact(selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null) {
-        const ball = otherCollider.node.getComponent(BallCtrl);
-        
-        if (ball) {
-            this.hp--;
-
-            if (this.hp <= 0) {
-                this.spawnPowerUp();
-                setTimeout(() => {
-                    if (this.node && this.node.isValid) {
-                        this.node.destroy();
-                    }
-                }, 0);
-            }
+    /** Hàm xử lý sát thương do Ball điều hướng bắn sang */
+    public takeDamage() {
+        this.hp--;
+        if (this.hp <= 0) {
+            this.spawnPowerUp();
+            this.node.destroy();
         }
     }
 
     private spawnPowerUp() {
-        if (Math.random() > 0.2) return; 
-
-        if (!this.powerUpPrefab) return;
+        if (Math.random() > 0.2) return; // 20% tỉ lệ xuất hiện item
+        if (!this.powerUpPrefab || !this.node.parent) return;
 
         const powerUpNode = instantiate(this.powerUpPrefab);
-        
-        // SỬA TẠI ĐÂY: Cho PowerUp làm con trực tiếp của BrickContainer (chung cha với viên gạch)
-        powerUpNode.parent = this.node.parent; 
-        
-        // Bây giờ lấy tọa độ này gán sang sẽ chính xác hoàn toàn vị trí viên gạch vừa vỡ
+        powerUpNode.parent = this.node.parent.parent;
         powerUpNode.setPosition(this.node.getPosition());
 
-        const types = [PowerUpType.DUPLICATE, PowerUpType.EXPAND, PowerUpType.LASER, PowerUpType.SLOW];
+        // const types = [PowerUpType.DUPLICATE, PowerUpType.EXPAND, PowerUpType.SLOW];
+        const types = [PowerUpType.SLOW];
         const randomType = types[Math.floor(Math.random() * types.length)];
 
         const ctrl = powerUpNode.getComponent(PowerUpCtrl);

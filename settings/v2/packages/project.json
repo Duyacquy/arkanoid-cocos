@@ -12,15 +12,6 @@
       "1": 4,
       "2": 3
     },
-    "collisionGroups": [
-      {
-        "index": 1,
-        "name": "POWERUP"
-      },
-      {
-        "index": 2,
-        "name": "PADDLE"
-      }
-    ]
+    "collisionGroups": []
   }
 }

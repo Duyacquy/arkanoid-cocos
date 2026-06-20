@@ -1,12 +1,13 @@
-import { _decorator, Component, Node, EventTouch, Vec3, Animation, Prefab } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform } from 'cc';
 import { BallCtrl } from './BallCtrl';
 import { PowerUpType } from './PowerUpCtrl';
+import { LevelManager } from './LevelManager';
+import { PowerUpManager } from './PowerUpManager';
 
 const { ccclass, property } = _decorator;
 
 @ccclass('GameCtrl')
 export class GameCtrl extends Component {
-
     @property(Node)
     public paddle: Node = null!;
 
@@ -22,34 +23,107 @@ export class GameCtrl extends Component {
     @property(Prefab)
     public ballPrefab: Prefab = null!;
 
-    @property
-    public paddleMinX!: number;
-    @property
-    public paddleMaxX!: number;
+    @property(LevelManager)
+    public levelManager: LevelManager = null!;
+
+    private activeBalls: Node[] = [];
+    
+    // Quản lý trạng thái Buff mở rộng thanh trượt
+    private normalPaddleWidth: number = 180;
+    private extendedPaddleWidth: number = 240; 
+    private paddleBuffToken: number = 0;
+
+    // Quản lý trạng thái Buff làm chậm bóng 
+    private ballSlowToken: number = 0;
+    private resetPaddleSize: Function = null!;
+    private resetBallSpeed: Function = null!;
+    private isBallSlowed: boolean = false;
 
     private minX: number = 0;
     private maxX: number = 0;
+    
+    private paddleMinX: number = 0;
+    private paddleMaxX: number = 0;
 
     start() {
-        const barWidth = this.scrollBar.getComponent(cc.UITransform)?.contentSize.width || 200;
-        const btnWidth = this.controlButton.getComponent(cc.UITransform)?.contentSize.width || 40;
-        
-        this.minX = - (barWidth + btnWidth * 4.5);
-        this.maxX = barWidth + btnWidth * 4.5;
-
         this.controlButton.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
         this.controlButton.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
         this.controlButton.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
 
-        this.playPaddleSpawn();
+        // Đăng ký bóng ban đầu vào mảng quản lý
+        if (this.ballCtrl) {
+            this.ballCtrl.setGameCtrl(this);
+            this.activeBalls.push(this.ballCtrl.node);
+        }
+
+        // Tự động lấy chiều rộng chuẩn của Paddle được thiết kế từ Editor làm mốc gốc
+        if (this.paddle) {
+            const paddleTransform = this.paddle.getComponent(UITransform);
+            if (paddleTransform) {
+                this.normalPaddleWidth = paddleTransform.width;
+            }
+        }
+        
+        this.calculateResponsiveBounds();
     }
 
-    public playPaddleSpawn() {
-        if (this.paddle) {
-            const anim = this.paddle.getComponent(Animation);
-            if (anim) {
-                anim.play('PaddleSpawn'); 
+    private calculateResponsiveBounds() {
+        const barTransform = this.scrollBar.getComponent(UITransform);
+        const btnTransform = this.controlButton.getComponent(UITransform);
+        
+        if (barTransform && btnTransform) {
+            const barWidth = barTransform.contentSize.width;
+            const btnWidth = btnTransform.contentSize.width;
+            
+            this.maxX = (barWidth - btnWidth) / 2;
+            this.minX = -this.maxX;
+        }
+
+        if (this.ballCtrl && this.ballCtrl.playZone) {
+            const zoneTransform = this.ballCtrl.playZone.getComponent(UITransform);
+            const paddleTransform = this.paddle.getComponent(UITransform);
+
+            if (zoneTransform && paddleTransform) {
+                const playableWidth = zoneTransform.contentSize.width; 
+                const paddleWidth = paddleTransform.contentSize.width;
+
+                this.paddleMaxX = (playableWidth - paddleWidth) / 2;
+                this.paddleMinX = -this.paddleMaxX;
             }
+        } else {
+            this.paddleMaxX = 250;
+            this.paddleMinX = -250;
+        }
+    }
+
+    private onTouchMove(event: EventTouch) {
+        const delta = event.getUIDelta();
+        
+        let currentBtnPos = this.controlButton.getPosition();
+        let newBtnX = currentBtnPos.x + delta.x;
+        newBtnX = Math.max(this.minX, Math.min(this.maxX, newBtnX));
+        this.controlButton.setPosition(new Vec3(newBtnX, currentBtnPos.y, currentBtnPos.z));
+
+        const range = this.maxX - this.minX;
+        const ratio = range === 0 ? 0.5 : (newBtnX - this.minX) / range;
+
+        const paddleRange = this.paddleMaxX - this.paddleMinX;
+        const newPaddleX = this.paddleMinX + (ratio * paddleRange);
+
+        let currentPaddlePos = this.paddle.getPosition();
+        this.paddle.setPosition(new Vec3(newPaddleX, currentPaddlePos.y, currentPaddlePos.z));
+    }
+
+    private onTouchEnd() {
+        if (this.ballCtrl) {
+            this.ballCtrl.launchBall();
+        }
+    }
+
+    public refreshActiveBalls() {
+        if (this.ballCtrl && this.ballCtrl.node.parent) {
+            const ballNodes = this.ballCtrl.node.parent.children.filter(child => child.getComponent(BallCtrl) !== null);
+            this.activeBalls = ballNodes;
         }
     }
 
@@ -58,131 +132,108 @@ export class GameCtrl extends Component {
         
         switch (type) {
             case PowerUpType.DUPLICATE:
-                this.handleDuplicateBall();
+                if (this.activeBalls.length > 0 && this.ballPrefab) {
+                    PowerUpManager.handleDuplicateBall(this.activeBalls[0], this.ballPrefab);
+                    this.refreshActiveBalls();
+                }
                 break;
+
             case PowerUpType.EXPAND:
-                this.handleExpandPaddle();
-                break;
-            case PowerUpType.LASER:
-                this.handleLaserActive();
+                this.paddleBuffToken++; // Tăng định danh lượt ăn vật phẩm chống trùng đè Timer
+                const currentToken = this.paddleBuffToken;
+
+                // 1. Phóng to thanh trượt qua PowerUpManager
+                PowerUpManager.handleExpandPaddle(this.paddle, this.extendedPaddleWidth, (width) => {
+                    this.updatePaddleBounds(width);
+                });
+
+                // 2. Lên lịch trả lại kích thước cũ sau 7 giây
+                this.unscheduleAllCallbacks(); 
+                this.scheduleOnce(() => {
+                    if (currentToken === this.paddleBuffToken) {
+                        PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
+                            this.updatePaddleBounds(width);
+                        });
+                    }
+                }, 15);
                 break;
             case PowerUpType.SLOW:
-                this.handleSlowBall();
+                this.refreshActiveBalls();
+                
+                this.ballSlowToken++; 
+                const currentSlowToken = this.ballSlowToken;
+        
+                if (!this.isBallSlowed) {
+                    this.isBallSlowed = true;
+                    PowerUpManager.handleSlowBalls(this.activeBalls, 0.7); 
+                    console.log("Bóng bắt đầu chạy chậm.");
+                } else {
+                    console.log("Bóng đang chậm sẵn rồi, chỉ reset lại thời gian đếm ngược 5 giây!");
+                }
+        
+                // Hủy lịch hẹn cũ để làm tươi thời gian
+                this.unschedule(this.resetBallSpeed);
+        
+                // Lên lịch sau 5 giây hồi phục
+                this.scheduleOnce(this.resetBallSpeed = () => {
+                    if (currentSlowToken === this.ballSlowToken) {
+                        this.refreshActiveBalls();
+                        
+                        // Trả lại tốc độ gốc và gỡ cờ trạng thái chậm
+                        PowerUpManager.handleSlowBalls(this.activeBalls, 2); // Nhân đôi để về ban đầu
+                        this.isBallSlowed = false; 
+                        
+                        console.log("Hết thời gian làm chậm! Bóng tăng tốc trở lại.");
+                    }
+                }, 10); 
                 break;
         }
     }
 
-    // 1. Tạo ra 3 quả bóng ở 3 phía
-    private handleDuplicateBall() {
-        // if (!this.ballCtrl) return;
-        
-        // const currentBallNode = this.ballCtrl.node;
-        // const currentVelocity = this.ballCtrl.getComponent(cc.RigidBody2D)!.linearVelocity;
-
-        // // Tạo thêm quả bóng số 2 (lệch trái 30 độ)
-        // this.spawnExtraBall(currentBallNode.getPosition(), new cc.Vec2(currentVelocity.x - 150, currentVelocity.y));
-        
-        // // Tạo thêm quả bóng số 3 (lệch phải 30 độ)
-        // this.spawnExtraBall(currentBallNode.getPosition(), new cc.Vec2(currentVelocity.x + 150, currentVelocity.y));
-        console.log("Phân thân chi thuật");
-    }
-
-    private spawnExtraBall(position: cc.Vec3, velocity: cc.Vec2) {
-        if (!this.ballPrefab) return;
-        const extraBall = cc.instantiate(this.ballPrefab);
-        extraBall.parent = this.ballCtrl.node.parent;
-        extraBall.setPosition(position);
-        
-        const ctrl = extraBall.getComponent(BallCtrl);
-        if (ctrl) {
-            ctrl.launchBall(); // Kích hoạt bóng bay luôn
-            const rb = extraBall.getComponent(cc.RigidBody2D);
-            if (rb) rb.linearVelocity = velocity;
+    public handleBallLost(ballNode: Node) {
+        const index = this.activeBalls.indexOf(ballNode);
+        if (index > -1) {
+            this.activeBalls.splice(index, 1);
         }
-    }
 
-    // 2. Mở rộng kích thước Paddle
-    private handleExpandPaddle() {
-        // if (!this.paddle) return;
-        // const uiTransform = this.paddle.getComponent(cc.UITransform);
-        // if (uiTransform) {
-        //     const originalWidth = uiTransform.contentSize.width;
-        //     uiTransform.setContentSize(originalWidth * 1.5, uiTransform.contentSize.height);
+        if (ballNode !== this.ballCtrl.node) {
+            ballNode.destroy();
+        } else {
+            ballNode.active = false; 
+        }
+
+        if (this.activeBalls.length === 0) {
+            console.log("Hết sạch bóng! Bạn đã mất 1 mạng.");
             
-        //     // Cập nhật lại BoxCollider2D của Paddle nếu có để va chạm chuẩn xác hơn
-        //     const collider = this.paddle.getComponent(cc.BoxCollider2D);
-        //     if (collider) {
-        //         collider.size.width = originalWidth * 1.5;
-        //         collider.apply();
-        //     }
-
-        //     // Sau 10 giây quay về kích thước cũ
-        //     this.scheduleOnce(() => {
-        //         uiTransform.setContentSize(originalWidth, uiTransform.contentSize.height);
-        //         if (collider) {
-        //             collider.size.width = originalWidth;
-        //             collider.apply();
-        //         }
-        //     }, 10);
-        // }
-        console.log("Bành trướng lãnh địa");
-    }
-
-    // 3. Làm chậm bóng
-    private handleSlowBall() {
-        // // Tìm tất cả các quả bóng đang có trong bàn chơi và giảm speed
-        // const balls = this.node.parent?.addComponent(cc.Canvas).node.getComponentsInChildren(BallCtrl); 
-        // // Hoặc quản lý mảng bóng riêng. Tạm thời chỉnh quả bóng chính:
-        // if (this.ballCtrl) {
-        //     const rb = this.ballCtrl.getComponent(cc.RigidBody2D);
-        //     if (rb) {
-        //         rb.linearVelocity = rb.linearVelocity.multiplyScalar(0.5); // Giảm nửa tốc độ
-                
-        //         // Sau 5 giây hồi phục lại tốc độ cũ
-        //         this.scheduleOnce(() => {
-        //             rb.linearVelocity = rb.linearVelocity.multiplyScalar(2);
-        //         }, 5);
-        //     }
-        // }
-        console.log("Bóng chạy chậm!");
-    }
-
-    // 4. Bắn Lazer từ Paddle
-    private handleLaserActive() {
-        console.log("Paddle đang bắn Laser!");
-    }
-
-    private onTouchMove(event: EventTouch) {
-        const delta = event.getUIDelta();
-        let currentPos = this.controlButton.getPosition();
-        let newX = currentPos.x + delta.x;
-
-        if (newX < this.minX) newX = this.minX;
-        if (newX > this.maxX) newX = this.maxX;
-
-        this.controlButton.setPosition(new Vec3(newX, currentPos.y, currentPos.z));
-
-        const range = this.maxX - this.minX;
-        const ratio = (newX - this.minX) / range;
-
-        const paddleRange = this.paddleMaxX - this.paddleMinX;
-        const paddleNewX = this.paddleMinX + (ratio * paddleRange);
-
-        let paddlePos = this.paddle.getPosition();
-        this.paddle.setPosition(new Vec3(paddleNewX, paddlePos.y, paddlePos.z));
-    }
-
-    private onTouchEnd(event: EventTouch) {
-        if (this.ballCtrl) {
-            this.ballCtrl.launchBall();
+            this.ballCtrl.node.active = true;
+            this.ballCtrl.resetBall();
+            this.activeBalls.push(this.ballCtrl.node);
+            
+            // Cập nhật lại biên chuẩn cho Paddle lúc hồi sinh phòng hờ khi đang còn kích thước buff
+            const paddleTransform = this.paddle.getComponent(UITransform);
+            if (paddleTransform) {
+                this.updatePaddleBounds(paddleTransform.width);
+            }
+        } else {
+            console.log(`Vẫn còn ${this.activeBalls.length} quả bóng trên sân, tiếp tục chơi!`);
         }
     }
 
-    protected onDestroy(): void {
-        if (this.controlButton) {
-            this.controlButton.off(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
-            this.controlButton.off(Node.EventType.TOUCH_END, this.onTouchEnd, this);
-            this.controlButton.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
+    public updatePaddleBounds(currentPaddleWidth: number) {
+        if (this.ballCtrl && this.ballCtrl.playZone) {
+            const zoneTransform = this.ballCtrl.playZone.getComponent(UITransform);
+            if (zoneTransform) {
+                const playableWidth = zoneTransform.contentSize.width;
+                
+                this.paddleMaxX = (playableWidth - currentPaddleWidth) / 2;
+                this.paddleMinX = -this.paddleMaxX;
+
+                let currentPos = this.paddle.getPosition();
+                let clampedX = Math.max(this.paddleMinX, Math.min(this.paddleMaxX, currentPos.x));
+                if (clampedX !== currentPos.x) {
+                    this.paddle.setPosition(clampedX, currentPos.y, currentPos.z);
+                }
+            }
         }
     }
 }
