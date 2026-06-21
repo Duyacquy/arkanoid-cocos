@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AnimationClip } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AudioClip, AudioSource } from 'cc';
 import { BallCtrl } from './BallCtrl';
 import { PowerUpType } from './PowerUpCtrl';
 import { LevelManager } from './LevelManager';
@@ -10,6 +10,30 @@ const { ccclass, property } = _decorator;
 
 @ccclass('GameCtrl')
 export class GameCtrl extends Component {
+    @property(AudioSource)
+    public audioSource: AudioSource = null!; 
+
+    @property(AudioClip)
+    public sndBallLoss: AudioClip = null!; 
+
+    @property(AudioClip)
+    public sndBlockDestroy: AudioClip = null!;
+
+    @property(AudioClip)
+    public sndGameOver: AudioClip = null!; 
+
+    @property(AudioClip)
+    public sndLaserShot: AudioClip = null!;
+
+    @property(AudioClip)
+    public sndPaddleHit: AudioClip = null!; 
+
+    @property(AudioClip)
+    public sndRoundStart: AudioClip = null!;
+
+    @property(AudioClip)
+    public sndPowerUpReceived: AudioClip = null!;
+
     @property(Node)
     public paddle: Node = null!;
 
@@ -69,7 +93,7 @@ export class GameCtrl extends Component {
 
     private obstaclesList: Node[] = [];
     private obstacleTimer: number = 0;
-    private readonly obstacleInterval: number = 15;
+    private readonly obstacleInterval: number = 20;
 
     private activeBalls: Node[] = [];
     private isPlaying: boolean = true;
@@ -136,6 +160,9 @@ export class GameCtrl extends Component {
 
         this.obstaclesList = [];
         this.obstacleTimer = 0;
+
+        this.playSound(this.sndRoundStart);
+        this.playPaddleIntroSequence();
     }
 
     private playPaddleIntroSequence() {
@@ -161,6 +188,7 @@ export class GameCtrl extends Component {
             if (this.laserFireTimer >= this.laserFireInterval) {
                 this.laserFireTimer = 0;
                 PowerUpManager.handleFireLaser(this.paddle, this.laserBulletPrefab, this.laserMuzzleOffset);
+                this.playSound(this.sndLaserShot, 0.4);
             }
         }
 
@@ -172,6 +200,12 @@ export class GameCtrl extends Component {
             }
 
             this.checkBallObstacleCollision();
+        }
+    }
+
+    public playSound(clip: AudioClip, volume: number = 1.0) {
+        if (this.audioSource && clip) {
+            this.audioSource.playOneShot(clip, volume);
         }
     }
 
@@ -244,7 +278,8 @@ export class GameCtrl extends Component {
 
     public activatePowerUp(type: PowerUpType) {
         console.log("Đã ăn vật phẩm: ", type);
-        
+        this.playSound(this.sndPowerUpReceived);
+
         switch (type) {
             case PowerUpType.DUPLICATE:
                 this.refreshActiveBalls();
@@ -385,7 +420,9 @@ export class GameCtrl extends Component {
             
             this.lives--;
             this.updateLivesUI(); 
-    
+            
+            this.playSound(this.sndBallLoss);
+
             this.currentPaddleMode = 'NONE';
             this.paddleBuffToken++;
     
@@ -423,16 +460,15 @@ export class GameCtrl extends Component {
         }
 
         if (this.resultPanel) {
-            // Bước A: Bật Active Panel lên trước
             this.resultPanel.active = true;
 
-            // Bước B: Đặt Scale ban đầu về 0 (nhỏ vô hình) để chuẩn bị phóng to
             this.resultPanel.setScale(new Vec3(0, 0, 1));
 
-            // Bước C: Cập nhật nội dung chữ text trước khi hiện
+            this.playSound(this.sndGameOver);
+
             if (this.panelTitleLabel) {
                 if (isWin) {
-                    this.panelTitleLabel.string = "CONGRATULATIONS!";
+                    this.panelTitleLabel.string = "VICTORY";
                 } else {
                     this.panelTitleLabel.string = "GAME OVER";
                 }
@@ -451,6 +487,8 @@ export class GameCtrl extends Component {
     }
 
     public onClickPlayAgain() {
+        this.playSound(this.sndRoundStart);
+
         this.currentScore = 0;
         this.lives = 3;
         this.isPlaying = true;
@@ -490,6 +528,8 @@ export class GameCtrl extends Component {
         PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
             this.updatePaddleBounds(width);
         });
+
+        this.playSound(this.sndRoundStart);
 
         this.ballCtrl.node.active = true;
         this.ballCtrl.resetBall();
@@ -609,7 +649,8 @@ export class GameCtrl extends Component {
                     }
                     ballCtrl.setVelocity(velocity);
 
-                    // Kích hoạt quái phát nổ EnemyExplosion và tự xóa mình
+                    this.playSound(this.sndBlockDestroy, 0.8);
+
                     const obsCtrl = obstacleNode.getComponent(ObstacleItemCtrl);
                     if (obsCtrl) {
                         obsCtrl.explodeAndDestroy();

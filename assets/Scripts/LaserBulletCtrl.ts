@@ -59,7 +59,10 @@ export class LaserBulletCtrl extends Component {
                     brickCtrl.takeDamage();
                 }
                 
-                // Đạn trúng gạch -> Hủy đạn lập tức
+                if (brickCtrl && brickCtrl.gameCtrl) {
+                    brickCtrl.gameCtrl.playSound(brickCtrl.gameCtrl.sndBlockDestroy, 0.75);
+                }
+                
                 this.node.destroy();
                 break;
             }

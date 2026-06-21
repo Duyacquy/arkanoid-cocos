@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3, Vec2, UITransform } from 'cc';
+import { _decorator, Component, Node, Vec3, UITransform, Sprite, UIOpacity, Color, tween } from 'cc';
 import { Physics2DHelper } from './Physics2DHelper';
 import { BrickCtrl } from './BrickCtrl';
 
@@ -26,6 +26,8 @@ export class BallCtrl extends Component {
     private maxPlayX: number = 0;
     private maxPlayY: number = 0;
     private minPlayY: number = 0;
+    private trailTimer: number = 0;
+    private readonly trailInterval: number = 0.035;
 
     private gameCtrl: any = null;
 
@@ -43,18 +45,14 @@ export class BallCtrl extends Component {
 
     /** Hàm khởi tạo đặc biệt dành riêng cho bóng phụ khi phân thân */
     public initExtraBall(parent: Node, pos: Vec3, vel: Vec3, speed: number) {
-        // 1. GÁN CHA TRƯỚC để xác định hệ tọa độ Local
         this.node.parent = parent;
     
-        // 2. BẬT CỜ để không bị dính vào logic update bám Paddle
         this.isLaunched = true;
         this.ballSpeed = speed;
         this.setVelocity(vel);
     
-        // 3. ĐẶT VỊ TRÍ CUỐI CÙNG (Trùng khớp 100% vị trí bóng gốc tại frame đó)
         this.node.setPosition(pos.clone());
         console.log(pos);
-        // Đảm bảo bóng phụ hiển thị lên bình thường
         this.node.active = true; 
     }
 
@@ -88,15 +86,61 @@ export class BallCtrl extends Component {
 
         if (this.isLaunched) {
             this.simulatePhysics(dt);
+            // this.updateBallTrail(dt);
         }
     }
 
-    /** Chia nhỏ frame (Sub-stepping) để quét va chạm chính xác cao */
+    // private updateBallTrail(dt: number) {
+    //     this.trailTimer += dt;
+
+    //     if (this.trailTimer >= this.trailInterval) {
+    //         this.trailTimer = 0;
+    //         this.createSingleTrailGhost();
+    //     }
+    // }
+
+    // private createSingleTrailGhost() {
+    //     const mySprite = this.getComponent(Sprite);
+    //     const myUI = this.getComponent(UITransform);
+
+    //     if (!mySprite || !mySprite.spriteFrame || !myUI || !this.node.parent) return;
+
+    //     const trailNode = new Node('BallBlurGhost');
+    //     trailNode.parent = this.node.parent;
+        
+    //     trailNode.setSiblingIndex(0); 
+        
+    //     trailNode.setPosition(this.node.position.clone());
+    //     trailNode.setScale(this.node.scale.clone());
+
+    //     const trailUI = trailNode.addComponent(UITransform);
+    //     trailUI.setContentSize(myUI.contentSize);
+
+    //     const trailSprite = trailNode.addComponent(Sprite);
+    //     trailSprite.spriteFrame = mySprite.spriteFrame;
+    //     trailSprite.color = new Color(120, 220, 255, 180); 
+
+    //     const opacityComp = trailNode.addComponent(UIOpacity);
+    //     opacityComp.opacity = 150;
+
+    //     tween(trailNode)
+    //         .to(0.22, { scale: new Vec3(this.node.scale.x * 0.45, this.node.scale.y * 0.45, 1) })
+    //         .start();
+
+    //     tween(opacityComp)
+    //         .to(0.22, { opacity: 0 })
+    //         .call(() => {
+    //             if (trailNode && trailNode.isValid) {
+    //                 trailNode.destroy();
+    //             }
+    //         })
+    //         .start();
+    // }
+
     private simulatePhysics(dt: number) {
         const speed = this.velocity.length();
         const travel = speed * dt;
         
-        // Cứ mỗi 10px chiều dài di chuyển ta quét va chạm 1 lần để tránh lọt lưới gạch
         const substepDistance = 10;
         let steps = Math.ceil(travel / substepDistance);
         steps = Physics2DHelper.clamp(steps, 1, 10);
@@ -164,6 +208,10 @@ export class BallCtrl extends Component {
             this.velocity.x = Math.sin(angle) * speed;
             this.velocity.y = Math.cos(angle) * speed;
 
+            if (this.gameCtrl) {
+                this.gameCtrl.playSound(this.gameCtrl.sndPaddleHit);
+            }
+            
             // Đẩy bóng lên đỉnh thanh paddle ngay lập tức để tránh dính đúp va chạm
             const newY = paddlePos.y + paddleUI.height / 2 + this.ballRadius;
             this.node.setPosition(ballPos.x, newY, 0);
@@ -196,6 +244,10 @@ export class BallCtrl extends Component {
 
                 if (this.gameCtrl) {
                     this.gameCtrl.addScore(10); 
+                }
+
+                if (this.gameCtrl) {
+                    this.gameCtrl.playSound(this.gameCtrl.sndBlockDestroy, 0.85);
                 }
 
                 const ctrl = brick.getComponent(BrickCtrl);
