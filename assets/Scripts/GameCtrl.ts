@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation } from 'cc';
 import { BallCtrl } from './BallCtrl';
 import { PowerUpType } from './PowerUpCtrl';
 import { LevelManager } from './LevelManager';
@@ -20,25 +20,40 @@ export class GameCtrl extends Component {
     @property(BallCtrl)
     public ballCtrl: BallCtrl = null!;
 
+    @property(Prefab)
+    public laserBulletPrefab: Prefab = null!;
+
     @property(LevelManager)
     public levelManager: LevelManager = null!;
 
+    // --- CẤU HÌNH ĐƯỢC ĐƯA RA INSPECTOR THEO YÊU CẦU ---
+    @property({ tooltip: 'Thời gian giãn cách giữa mỗi lượt bắn Laser (giây)' })
+    public laserFireInterval: number = 0.5;
+
+    @property({ tooltip: 'Khoảng cách vị trí nòng súng thụt vào từ 2 đầu mép Paddle (px)' })
+    public laserMuzzleOffset: number = 18;
+
+    @property({ tooltip: 'Tổng thời gian duy trì trạng thái bắn Laser (giây)' })
+    public laserDuration: number = 10;
+
     private activeBalls: Node[] = [];
+    private isPlaying: boolean = true;
     
-    // Quản lý trạng thái Buff mở rộng thanh trượt
+    private currentPaddleMode: 'NONE' | 'EXPAND' | 'LASER' = 'NONE';
+    private paddleBuffToken: number = 0; 
+
     private normalPaddleWidth: number = 180;
     private extendedPaddleWidth: number = 240; 
-    private paddleBuffToken: number = 0;
 
-    // Quản lý trạng thái Buff làm chậm bóng 
     private ballSlowScale: number = 0.7;
     private ballSlowToken: number = 0;
     private resetBallSpeed: Function = null!;
     private isBallSlowed: boolean = false;
 
+    private laserFireTimer: number = 0;
+
     private minX: number = 0;
     private maxX: number = 0;
-    
     private paddleMinX: number = 0;
     private paddleMaxX: number = 0;
 
@@ -47,13 +62,11 @@ export class GameCtrl extends Component {
         this.controlButton.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
         this.controlButton.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
 
-        // Đăng ký bóng ban đầu vào mảng quản lý
         if (this.ballCtrl) {
             this.ballCtrl.setGameCtrl(this);
             this.activeBalls.push(this.ballCtrl.node);
         }
 
-        // Tự động lấy chiều rộng chuẩn của Paddle được thiết kế từ Editor làm mốc gốc
         if (this.paddle) {
             const paddleTransform = this.paddle.getComponent(UITransform);
             if (paddleTransform) {
@@ -62,6 +75,33 @@ export class GameCtrl extends Component {
         }
         
         this.calculateResponsiveBounds();
+        this.playPaddleIntroSequence();
+    }
+
+    private playPaddleIntroSequence() {
+        if (!this.paddle) return;
+        const anim = this.paddle.getComponent(Animation);
+        if (anim) {
+            anim.stop();
+            anim.play('PaddleSpawn'); 
+            
+            anim.once(Animation.EventType.FINISHED, () => {
+                if (this.currentPaddleMode === 'NONE') {
+                    anim.play('PaddlePulsate');
+                }
+            }, this);
+        }
+    }
+
+    update(dt: number) {
+        if (this.isPlaying && this.currentPaddleMode === 'LASER') {
+            this.laserFireTimer += dt;
+            if (this.laserFireTimer >= this.laserFireInterval) {
+                this.laserFireTimer = 0;
+                // Truyền thông số offset cấu hình sang cho Manager xử lý bắn
+                PowerUpManager.handleFireLaser(this.paddle, this.laserBulletPrefab, this.laserMuzzleOffset);
+            }
+        }
     }
 
     private calculateResponsiveBounds() {
@@ -135,34 +175,13 @@ export class GameCtrl extends Component {
             case PowerUpType.DUPLICATE:
                 this.refreshActiveBalls();
                 if (this.activeBalls.length > 0) {
-                    const sourceBall = this.activeBalls[0]; 
-                    PowerUpManager.handleDuplicateBall(sourceBall);
+                    PowerUpManager.handleDuplicateBall(this.activeBalls[0]);
                     this.refreshActiveBalls();
                 }
                 break;
-
-            case PowerUpType.EXPAND:
-                this.paddleBuffToken++; // Tăng định danh lượt ăn vật phẩm chống trùng đè Timer
-                const currentToken = this.paddleBuffToken;
-
-                // 1. Phóng to thanh trượt qua PowerUpManager
-                PowerUpManager.handleExpandPaddle(this.paddle, this.extendedPaddleWidth, (width) => {
-                    this.updatePaddleBounds(width);
-                });
-
-                // 2. Lên lịch trả lại kích thước cũ sau 7 giây
-                this.unscheduleAllCallbacks(); 
-                this.scheduleOnce(() => {
-                    if (currentToken === this.paddleBuffToken) {
-                        PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
-                            this.updatePaddleBounds(width);
-                        });
-                    }
-                }, 15);
-                break;
+            
             case PowerUpType.SLOW:
                 this.refreshActiveBalls();
-                
                 this.ballSlowToken++; 
                 const currentSlowToken = this.ballSlowToken;
         
@@ -170,37 +189,79 @@ export class GameCtrl extends Component {
                     this.isBallSlowed = true;
                     PowerUpManager.handleSlowBalls(this.activeBalls, this.ballSlowScale); 
                     console.log("Bóng bắt đầu chạy chậm.");
-                } else {
-                    console.log("Bóng đang chậm sẵn rồi, chỉ reset lại thời gian đếm ngược 5 giây!");
                 }
         
-                // Hủy lịch hẹn cũ để làm tươi thời gian
                 this.unschedule(this.resetBallSpeed);
-        
-                // Lên lịch sau 5 giây hồi phục
                 this.scheduleOnce(this.resetBallSpeed = () => {
                     if (currentSlowToken === this.ballSlowToken) {
                         this.refreshActiveBalls();
-                        
-                        // Trả lại tốc độ gốc và gỡ cờ trạng thái chậm
-                        PowerUpManager.handleSlowBalls(this.activeBalls, 1.0 / this.ballSlowScale); // Nhân đôi để về ban đầu
+                        PowerUpManager.handleSlowBalls(this.activeBalls, 1.0 / this.ballSlowScale);
                         this.isBallSlowed = false; 
-                        
                         console.log("Hết thời gian làm chậm! Bóng tăng tốc trở lại.");
                     }
                 }, 10); 
+                break;
+
+            case PowerUpType.EXPAND:
+                if (this.currentPaddleMode === 'LASER') {
+                    PowerUpManager.handleDisableLaser(this.paddle);
+                }
+
+                this.currentPaddleMode = 'EXPAND';
+                this.paddleBuffToken++;
+                const currentExpandToken = this.paddleBuffToken;
+
+                PowerUpManager.handleExpandPaddle(this.paddle, this.extendedPaddleWidth, (width) => {
+                    this.updatePaddleBounds(width);
+                });
+
+                this.scheduleOnce(() => {
+                    if (currentExpandToken === this.paddleBuffToken && this.currentPaddleMode === 'EXPAND') {
+                        this.currentPaddleMode = 'NONE';
+                        PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
+                            this.updatePaddleBounds(width);
+                        });
+                        const anim = this.paddle.getComponent(Animation);
+                        if (anim) anim.play('PaddlePulsate');
+                        console.log("Hết thời gian phóng to! Paddle co lại.");
+                    }
+                }, 10);
+                break;
+
+            case PowerUpType.LASER:
+                if (this.currentPaddleMode === 'EXPAND') {
+                    this.paddleBuffToken++; 
+                    PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
+                        this.updatePaddleBounds(width);
+                    });
+                }
+
+                this.currentPaddleMode = 'LASER';
+                this.paddleBuffToken++;
+                const currentLaserToken = this.paddleBuffToken;
+                
+                this.laserFireTimer = this.laserFireInterval; 
+
+                PowerUpManager.handleEnableLaser(this.paddle, () => {
+                    console.log("Hệ thống Laser đã khởi động xong!");
+                });
+
+                this.scheduleOnce(() => {
+                    if (currentLaserToken === this.paddleBuffToken && this.currentPaddleMode === 'LASER') {
+                        this.currentPaddleMode = 'NONE';
+                        PowerUpManager.handleDisableLaser(this.paddle);
+                    }
+                }, this.laserDuration); 
                 break;
         }
     }
 
     public handleBallLost(ballNode: Node) {
-        // 1. Loại bỏ ngay lập tức Node bóng này ra khỏi mảng activeBalls (xóa Real-time)
         const index = this.activeBalls.indexOf(ballNode);
         if (index > -1) {
             this.activeBalls.splice(index, 1);
         }
     
-        // 2. Xử lý ẩn/hủy Node
         if (ballNode !== this.ballCtrl.node) {
             ballNode.destroy(); 
         } else {
@@ -220,6 +281,9 @@ export class GameCtrl extends Component {
             if (paddleTransform) {
                 this.updatePaddleBounds(paddleTransform.width);
             }
+            
+            this.currentPaddleMode = 'NONE';
+            this.playPaddleIntroSequence();
         } else {
             console.log(`Vẫn còn ${this.activeBalls.length} quả bóng trên sân, tiếp tục chơi!`);
         }

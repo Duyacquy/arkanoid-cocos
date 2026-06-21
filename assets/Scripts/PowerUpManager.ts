@@ -1,4 +1,4 @@
-import { _decorator, Node, instantiate, Vec3, UITransform, tween } from 'cc';
+import { _decorator, Node, instantiate, Vec3, UITransform, tween, Prefab, Animation } from 'cc';
 import { BallCtrl } from './BallCtrl';
 
 export class PowerUpManager {
@@ -128,5 +128,79 @@ export class PowerUpManager {
                 // Duy có thể thêm logic đổi màu Sprite của bóng ở đây nếu thích
             }
         });
+    }
+
+    /**
+     * Xử lý kích hoạt trạng thái súng Laser cho Paddle
+     * @param paddle Node thanh trượt
+     * @param onLaserReady Callback kích hoạt bắn đạn bên GameCtrl khi khởi động súng xong
+     */
+    public static handleEnableLaser(paddle: Node, onLaserReady: () => void) {
+        if (!paddle) return;
+
+        const anim = paddle.getComponent(Animation);
+        if (anim) {
+            anim.stop();
+            anim.play('PaddleLaserStart'); // 1. Chạy hiệu ứng biến hình ra súng
+            
+            anim.once(Animation.EventType.FINISHED, () => {
+                // 2. Biến hình xong -> Chuyển sang loop nhấp nháy súng liên tục
+                anim.play('PaddleLaserPulsate');
+                onLaserReady();
+            });
+        } else {
+            onLaserReady();
+        }
+    }
+
+    /**
+     * Thu súng Laser về thông qua clip PaddleLaserEnd
+     */
+    public static handleDisableLaser(paddle: Node) {
+        if (!paddle) return;
+    
+        const anim = paddle.getComponent(Animation);
+        if (anim) {
+            anim.stop();
+            
+            const hasEndClip = anim.clips.some(clip => clip && clip.name === 'PaddleLaserEnd');
+    
+            if (hasEndClip) {
+                anim.play('PaddleLaserEnd'); // Chạy chính xác hiệu ứng thu súng
+                
+                anim.once(Animation.EventType.FINISHED, () => {
+                    anim.play('PaddlePulsate'); 
+                });
+            } else {
+                anim.play('PaddlePulsate');
+            }
+        }
+    }
+
+    /**
+     * Tính toán tọa độ và tạo 2 viên đạn Laser ở 2 đầu mép Paddle
+     */
+    public static handleFireLaser(paddle: Node, bulletPrefab: Prefab, muzzleOffset: number) {
+        if (!paddle || !bulletPrefab) return;
+
+        const paddleTransform = paddle.getComponent(UITransform);
+        if (!paddleTransform) return;
+
+        const paddlePos = paddle.getPosition();
+        const halfWidth = paddleTransform.width / 2;
+        const spawnY = paddlePos.y + paddleTransform.height / 2;
+
+        const leftMuzzleX = paddlePos.x - halfWidth + muzzleOffset;
+        const rightMuzzleX = paddlePos.x + halfWidth - muzzleOffset;
+
+        // Bắn viên trái
+        const leftBullet = instantiate(bulletPrefab);
+        paddle.parent!.addChild(leftBullet);
+        leftBullet.setPosition(new Vec3(leftMuzzleX, spawnY, 0));
+
+        // Bắn viên phải
+        const rightBullet = instantiate(bulletPrefab);
+        paddle.parent!.addChild(rightBullet);
+        rightBullet.setPosition(new Vec3(rightMuzzleX, spawnY, 0));
     }
 }
