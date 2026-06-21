@@ -43,11 +43,20 @@ export class BrickCtrl extends Component {
         if (this.hp <= 0) {
             this.spawnPowerUp();
             this.node.destroy();
+
+            // Kiểm tra xem đây có phải viên gạch cuối cùng không
+            if (this.node.parent && this.node.parent.children.length <= 1) { 
+                if (this.gameCtrl) {
+                    this.scheduleOnce(() => {
+                        this.gameCtrl.gameOver(true);
+                    }, 0.1);
+                }
+            }
         }
     }
 
     private spawnPowerUp() {
-        if (Math.random() > 0.2) return; // 20% tỉ lệ xuất hiện item
+        if (Math.random() > 0.2) return;
         if (!this.powerUpPrefab || !this.node.parent) return;
 
         const powerUpNode = instantiate(this.powerUpPrefab);

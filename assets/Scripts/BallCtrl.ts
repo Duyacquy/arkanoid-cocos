@@ -194,6 +194,10 @@ export class BallCtrl extends Component {
                     this.velocity.y *= -1; 
                 }
 
+                if (this.gameCtrl) {
+                    this.gameCtrl.addScore(10); 
+                }
+
                 const ctrl = brick.getComponent(BrickCtrl);
                 if (ctrl) {
                     ctrl.takeDamage();

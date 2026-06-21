@@ -29,7 +29,7 @@ export class LevelManager extends Component {
     //     [0, 0, 1, 1, 4, 4, 4, 1, 1, 0, 0],
     //     [0, 0, 0, 1, 1, 4, 1, 1, 0, 0, 0],
     //     [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-    //     [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+    //     [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], 
     // ];
 
     // --- MA TRẬN 3: MÀN CHƠI FULL GẠCH VÀNG (MẶC ĐỊNH ĐANG BẬT) ---
@@ -44,6 +44,10 @@ export class LevelManager extends Component {
         [3, 3, 3, 3, 3, 3, 3, 3],
         [3, 3, 3, 3, 3, 3, 3, 3],
     ];
+
+    // private levelData: number[][] = [
+    //     [3, 3, 3, 3, 3, 3, 3, 3]
+    // ];
 
     private brickWidth: number = 70;
     private brickHeight: number = 35;
@@ -74,7 +78,7 @@ export class LevelManager extends Component {
             
             const topEdge = zoneHeight / 2;
             
-            const marginTop = 250; 
+            const marginTop = 180; 
             
             startY = topEdge - marginTop - this.brickHeight / 2;
         } else {

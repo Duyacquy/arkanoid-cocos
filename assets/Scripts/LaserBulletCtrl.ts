@@ -30,7 +30,7 @@ export class LaserBulletCtrl extends Component {
         this.node.setPosition(pos);
 
         // 2. Kiểm tra tự hủy chuẩn responsive khi vượt quá đỉnh vùng chơi
-        if (pos.y > this.maxPlayY + 20) { // Cộng thêm 20px trừ hao đạn bay khuất hẳn rồi mới hủy
+        if (pos.y > this.maxPlayY + 20) { 
             this.node.destroy();
             return;
         }
@@ -49,10 +49,14 @@ export class LaserBulletCtrl extends Component {
             const brick = bricks[i];
             
             if (Physics2DHelper.isRectHit(this.node, brick)) {
-                // Gọi gạch nhận sát thương
-                const ctrl = brick.getComponent(BrickCtrl);
-                if (ctrl) {
-                    ctrl.takeDamage();
+                const brickCtrl = brick.getComponent(BrickCtrl);
+                
+                if (brickCtrl && brickCtrl.gameCtrl) {
+                    brickCtrl.gameCtrl.addScore(10);
+                }
+
+                if (brickCtrl) {
+                    brickCtrl.takeDamage();
                 }
                 
                 // Đạn trúng gạch -> Hủy đạn lập tức

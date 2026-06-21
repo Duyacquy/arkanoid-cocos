@@ -1,8 +1,10 @@
-import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AnimationClip } from 'cc';
 import { BallCtrl } from './BallCtrl';
 import { PowerUpType } from './PowerUpCtrl';
 import { LevelManager } from './LevelManager';
 import { PowerUpManager } from './PowerUpManager';
+import { ObstacleItemCtrl } from './ObstacleItemCtrl';
+import { Physics2DHelper } from './Physics2DHelper';
 
 const { ccclass, property } = _decorator;
 
@@ -26,7 +28,36 @@ export class GameCtrl extends Component {
     @property(LevelManager)
     public levelManager: LevelManager = null!;
 
-    // --- CẤU HÌNH ĐƯỢC ĐƯA RA INSPECTOR THEO YÊU CẦU ---
+    @property({ type: [Node] })
+    public paddleLivesUI: Node[] = [];
+
+    @property(Label)
+    public scoreLabel: Label = null!; 
+
+    @property(Label)
+    public bestLabel: Label = null!;  
+
+    @property(Node)
+    public resultPanel: Node = null!; 
+
+    @property(Label)
+    public panelTitleLabel: Label = null!; 
+
+    @property(Label)
+    public panelScoreLabel: Label = null!; 
+
+    @property(Node)
+    public playAgainButton: Node = null!;
+
+    @property(Node)
+    public edgeTop: Node = null!;
+
+    @property(Prefab)
+    public obstaclePrefab: Prefab = null!;
+
+    @property([Node])
+    public obstacleSpawnPoints: Node[] = [];
+
     @property({ tooltip: 'Thời gian giãn cách giữa mỗi lượt bắn Laser (giây)' })
     public laserFireInterval: number = 0.5;
 
@@ -36,9 +67,15 @@ export class GameCtrl extends Component {
     @property({ tooltip: 'Tổng thời gian duy trì trạng thái bắn Laser (giây)' })
     public laserDuration: number = 10;
 
+    private obstaclesList: Node[] = [];
+    private obstacleTimer: number = 0;
+    private readonly obstacleInterval: number = 15;
+
     private activeBalls: Node[] = [];
     private isPlaying: boolean = true;
-    
+    private lives: number = 3;
+    private isDying: boolean = false;
+
     private currentPaddleMode: 'NONE' | 'EXPAND' | 'LASER' = 'NONE';
     private paddleBuffToken: number = 0; 
 
@@ -57,10 +94,26 @@ export class GameCtrl extends Component {
     private paddleMinX: number = 0;
     private paddleMaxX: number = 0;
 
+    private currentScore: number = 0;
+    private bestScore: number = 0;
+
     start() {
+        this.currentScore = 0;
+        this.loadBestScore();
+        this.updateScoreUI();
+
         this.controlButton.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
         this.controlButton.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
         this.controlButton.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
+
+        if (this.resultPanel) {
+            this.resultPanel.active = false;
+        }
+
+        // Lắng nghe sự kiện click bằng mã code từ node bấm
+        if (this.playAgainButton) {
+            this.playAgainButton.on(Node.EventType.TOUCH_END, this.onClickPlayAgain, this);
+        }
 
         if (this.ballCtrl) {
             this.ballCtrl.setGameCtrl(this);
@@ -76,6 +129,13 @@ export class GameCtrl extends Component {
         
         this.calculateResponsiveBounds();
         this.playPaddleIntroSequence();
+
+        this.lives = 3;
+        this.isDying = false;
+        this.updateLivesUI();
+
+        this.obstaclesList = [];
+        this.obstacleTimer = 0;
     }
 
     private playPaddleIntroSequence() {
@@ -94,13 +154,24 @@ export class GameCtrl extends Component {
     }
 
     update(dt: number) {
+        if (this.isDying) return;
+
         if (this.isPlaying && this.currentPaddleMode === 'LASER') {
             this.laserFireTimer += dt;
             if (this.laserFireTimer >= this.laserFireInterval) {
                 this.laserFireTimer = 0;
-                // Truyền thông số offset cấu hình sang cho Manager xử lý bắn
                 PowerUpManager.handleFireLaser(this.paddle, this.laserBulletPrefab, this.laserMuzzleOffset);
             }
+        }
+
+        if (this.isPlaying) {
+            this.obstacleTimer += dt;
+            if (this.obstacleTimer >= this.obstacleInterval) {
+                this.obstacleTimer = 0;
+                this.handleGateOpeningAndSpawn();
+            }
+
+            this.checkBallObstacleCollision();
         }
     }
 
@@ -134,8 +205,9 @@ export class GameCtrl extends Component {
     }
 
     private onTouchMove(event: EventTouch) {
+        if (this.isDying || !this.isPlaying) return;
+
         const delta = event.getUIDelta();
-        
         let currentBtnPos = this.controlButton.getPosition();
         let newBtnX = currentBtnPos.x + delta.x;
         newBtnX = Math.max(this.minX, Math.min(this.maxX, newBtnX));
@@ -152,6 +224,8 @@ export class GameCtrl extends Component {
     }
 
     private onTouchEnd() {
+        if (this.isDying || !this.isPlaying) return;
+
         if (this.ballCtrl) {
             this.ballCtrl.launchBall();
         }
@@ -256,6 +330,41 @@ export class GameCtrl extends Component {
         }
     }
 
+    private updateLivesUI() {
+        for (let i = 0; i < this.paddleLivesUI.length; i++) {
+            if (this.paddleLivesUI[i]) {
+                this.paddleLivesUI[i].active = i < (this.lives - 1);
+            }
+        }
+    }
+
+    public addScore(amount: number) {
+        if (!this.isPlaying) return;
+        
+        this.currentScore += amount;
+        
+        if (this.currentScore > this.bestScore) {
+            this.bestScore = this.currentScore;
+            this.saveBestScore();
+        }
+        
+        this.updateScoreUI();
+    }
+
+    private updateScoreUI() {
+        if (this.scoreLabel) this.scoreLabel.string = `SCORE\n${this.currentScore}`;
+        if (this.bestLabel) this.bestLabel.string = `BEST\n${this.bestScore}`;
+    }
+
+    private loadBestScore() {
+        const savedBest = sys.localStorage.getItem('BrickBreaker_BestScore');
+        this.bestScore = savedBest ? parseInt(savedBest) : 0;
+    }
+
+    private saveBestScore() {
+        sys.localStorage.setItem('BrickBreaker_BestScore', this.bestScore.toString());
+    }
+
     public handleBallLost(ballNode: Node) {
         const index = this.activeBalls.indexOf(ballNode);
         if (index > -1) {
@@ -271,22 +380,122 @@ export class GameCtrl extends Component {
         this.refreshActiveBalls();
     
         if (this.activeBalls.length === 0) {
-            console.log("Hết sạch bóng! Bạn đã mất 1 mạng.");
+            if (this.isDying) return;
+            this.isDying = true;
             
-            this.ballCtrl.node.active = true;
-            this.ballCtrl.resetBall();
-            this.activeBalls.push(this.ballCtrl.node);
-            
-            const paddleTransform = this.paddle.getComponent(UITransform);
-            if (paddleTransform) {
-                this.updatePaddleBounds(paddleTransform.width);
-            }
-            
+            this.lives--;
+            this.updateLivesUI(); 
+    
             this.currentPaddleMode = 'NONE';
-            this.playPaddleIntroSequence();
+            this.paddleBuffToken++;
+    
+            const anim = this.paddle.getComponent(Animation);
+            if (anim) {
+                anim.stop();
+                anim.play('PaddleExplode'); 
+                
+                anim.once(Animation.EventType.FINISHED, () => {
+                    if (this.lives <= 0) {
+                        this.gameOver(false); 
+                    } else {
+                        this.scheduleOnce(() => {
+                            this.respawnPaddleAndBall();
+                        }, 0.8); 
+                    }
+                }, this);
+            } else {
+                if (this.lives <= 0) {
+                    this.gameOver(false);
+                } else {
+                    this.respawnPaddleAndBall();
+                }
+            }
         } else {
             console.log(`Vẫn còn ${this.activeBalls.length} quả bóng trên sân, tiếp tục chơi!`);
         }
+    }
+
+    public gameOver(isWin: boolean = false) {
+        this.isPlaying = false;
+        
+        if (this.ballCtrl) {
+            this.ballCtrl.resetBall();
+        }
+
+        if (this.resultPanel) {
+            // Bước A: Bật Active Panel lên trước
+            this.resultPanel.active = true;
+
+            // Bước B: Đặt Scale ban đầu về 0 (nhỏ vô hình) để chuẩn bị phóng to
+            this.resultPanel.setScale(new Vec3(0, 0, 1));
+
+            // Bước C: Cập nhật nội dung chữ text trước khi hiện
+            if (this.panelTitleLabel) {
+                if (isWin) {
+                    this.panelTitleLabel.string = "CONGRATULATIONS!";
+                } else {
+                    this.panelTitleLabel.string = "GAME OVER";
+                }
+            }
+
+            if (this.panelScoreLabel) {
+                this.panelScoreLabel.string = `SCORE\n${this.currentScore}`;
+            }
+
+            // Bước D: Chạy hiệu ứng Tween Pop-up (Phóng to kết hợp hiệu ứng Đàn hồi nhẹ)
+            tween(this.resultPanel)
+                .to(0.15, { scale: new Vec3(1.1, 1.1, 1) }, { easing: 'quadOut' }) 
+                .to(0.08, { scale: new Vec3(1, 1, 1) }, { easing: 'quadIn' })  
+                .start();
+        }
+    }
+
+    public onClickPlayAgain() {
+        this.currentScore = 0;
+        this.lives = 3;
+        this.isPlaying = true;
+        this.isDying = false;
+
+        for (let i = 0; i < this.paddleLivesUI.length; i++) {
+            if (this.paddleLivesUI[i]) this.paddleLivesUI[i].active = true;
+        }
+
+        if (this.resultPanel) {
+            this.resultPanel.active = false;
+        }
+
+        this.updateScoreUI();
+
+        for (let i = 0; i < this.obstaclesList.length; i++) {
+            if (this.obstaclesList[i] && this.obstaclesList[i].isValid) {
+                this.obstaclesList[i].destroy();
+            }
+        }
+        this.obstaclesList = [];
+        this.obstacleTimer = 0;
+
+        if (this.levelManager) {
+            if (this.levelManager.brickContainer) {
+                this.levelManager.brickContainer.removeAllChildren();
+            }
+            this.levelManager.generateLevel(); 
+        }
+
+        this.respawnPaddleAndBall();
+    }
+
+    private respawnPaddleAndBall() {
+        this.isDying = false;
+
+        PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
+            this.updatePaddleBounds(width);
+        });
+
+        this.ballCtrl.node.active = true;
+        this.ballCtrl.resetBall();
+        this.activeBalls.push(this.ballCtrl.node);
+
+        this.playPaddleIntroSequence();
     }
 
     public updatePaddleBounds(currentPaddleWidth: number) {
@@ -305,5 +514,127 @@ export class GameCtrl extends Component {
                 }
             }
         }
+    }
+
+    /** Xử lý chạy animation mở cổng trước khi thả quái vật */
+    private handleGateOpeningAndSpawn() {
+        if (!this.obstaclePrefab || this.obstacleSpawnPoints.length === 0) return;
+
+        // Chọn ngẫu nhiên index cổng: 0 là Cổng Trái, 1 là Cổng Phải
+        const gateIndex = Math.floor(Math.random() * this.obstacleSpawnPoints.length);
+        const spawnPoint = this.obstacleSpawnPoints[gateIndex];
+        if (!spawnPoint) return;
+
+        // Gọi Animation mở cổng trên EdgeTop
+        if (this.edgeTop) {
+            const anim = this.edgeTop.getComponent(Animation);
+            if (anim) {
+                const openAnimName = (gateIndex === 0) ? 'DoorTopLeft' : 'DoorTopRight';
+                const closeAnimName = (gateIndex === 0) ? 'DoorTopLeftRevert' : 'DoorTopRightRevert';
+                
+                if (anim.getState(openAnimName)) {
+                    // 1. Chạy hiệu ứng mở cửa
+                    anim.play(openAnimName);
+
+                    // 2. Lắng nghe sự kiện khi animation mở cửa kết thúc để tự động đóng lại
+                    anim.once(Animation.EventType.FINISHED, () => {
+                        // Đợi 0.1s sau khi mở hết cỡ rồi đóng lại cho mượt mà
+                        this.scheduleOnce(() => {
+                            if (anim.getState(closeAnimName)) {
+                                anim.play(closeAnimName);
+                            }
+                        }, 0.1);
+                    }, this);
+                }
+            }
+        }
+
+        // Chờ 0.24 giây cho cổng kịp hé mở rồi mới tiến hành sinh quái vật rơi xuống
+        this.scheduleOnce(() => {
+            this.spawnObstacleAt(spawnPoint);
+        }, 0.24);
+    }
+
+    /** Sinh quái vật tại điểm chỉ định */
+    private spawnObstacleAt(spawnPoint: Node) {
+        if (!this.isPlaying) return; 
+
+        const obstacleNode = instantiate(this.obstaclePrefab);
+        
+        // BƯỚC 1: ĐẶT CHA TRƯỚC (Để đồng bộ Hệ tọa độ Local)
+        if (this.ballCtrl && this.ballCtrl.node.parent) {
+            obstacleNode.parent = this.ballCtrl.node.parent;
+        } else {
+            obstacleNode.parent = this.node.parent;
+        }
+
+        // BƯỚC 2: ĐẶT VỊ TRÍ SAU (Lấy vị trí World của ống chuyển sang Local của cha mới)
+        const spawnWorldPos = spawnPoint.parent!.getComponent(UITransform)!.convertToWorldSpaceAR(spawnPoint.position);
+        const localPos = obstacleNode.parent.getComponent(UITransform)!.convertToNodeSpaceAR(spawnWorldPos);
+        obstacleNode.setPosition(localPos);
+
+        const brickContainer = this.levelManager ? this.levelManager.brickContainer : null;
+        const playZoneNode = this.ballCtrl ? this.ballCtrl.playZone : null;
+
+        // BƯỚC 3: KHỞI TẠO RESPONSIVE & CHẠY ANIMATION DI CHUYỂN MẶC ĐỊNH
+        const ctrl = obstacleNode.getComponent(ObstacleItemCtrl);
+        if (ctrl) {
+            ctrl.initObstacle(this, brickContainer, playZoneNode);
+        }
+
+        this.obstaclesList.push(obstacleNode);
+    }
+
+    private checkBallObstacleCollision() {
+        if (this.activeBalls.length === 0 || this.obstaclesList.length === 0) return;
+
+        for (let b = 0; b < this.activeBalls.length; b++) {
+            const ballNode = this.activeBalls[b];
+            const ballCtrl = ballNode.getComponent(BallCtrl);
+            if (!ballCtrl) continue;
+
+            for (let o = this.obstaclesList.length - 1; o >= 0; o--) {
+                const obstacleNode = this.obstaclesList[o];
+
+                if (Physics2DHelper.isRectHit(ballNode, obstacleNode)) {
+                    // Xử lý nảy hướng bóng (Không tăng tốc độ bóng)
+                    let velocity = ballCtrl.getVelocity();
+                    const ballPos = ballNode.position;
+                    const obsPos = obstacleNode.position;
+
+                    if (Math.abs(ballPos.x - obsPos.x) > Math.abs(ballPos.y - obsPos.y)) {
+                        velocity.x *= -1; // Đập hông -> nảy ngang
+                    } else {
+                        velocity.y *= -1; // Đập đỉnh/đáy -> nảy dọc
+                    }
+                    ballCtrl.setVelocity(velocity);
+
+                    // Kích hoạt quái phát nổ EnemyExplosion và tự xóa mình
+                    const obsCtrl = obstacleNode.getComponent(ObstacleItemCtrl);
+                    if (obsCtrl) {
+                        obsCtrl.explodeAndDestroy();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Hàm bổ trợ giúp Obstacle tự xóa mình khỏi mảng quản lý khi nổ */
+    public removeObstacleFromList(obstacleNode: Node) {
+        const idx = this.obstaclesList.indexOf(obstacleNode);
+        if (idx > -1) {
+            this.obstaclesList.splice(idx, 1);
+        }
+    }
+
+    /** Hiệu ứng co giãn nhẹ Paddle khi va chạm */
+    public playPaddleHitEffect() {
+        if (!this.paddle) return;
+        this.paddle.setScale(1, 1, 1);
+        tween(this.paddle)
+            .to(0.06, { scale: new Vec3(1.12, 0.82, 1) })
+            .to(0.08, { scale: new Vec3(1, 1, 1) })
+            .start();
     }
 }
