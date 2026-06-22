@@ -183,10 +183,10 @@
     "__prefab": {
       "__id__": 9
     },
-    "fallSpeed": 72,
-    "chaseSpeed": 58,
-    "avoidSpeed": 62,
-    "chaseStartOffsetFromPaddle": 300,
+    "fallSpeed": 80,
+    "chaseSpeed": 65,
+    "avoidSpeed": 70,
+    "chaseStartOffsetFromPaddle": 900,
     "_id": ""
   },
   {

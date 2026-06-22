@@ -73,8 +73,7 @@ export class ObstacleItemCtrl extends Component {
     }
 
     update(dt: number) {
-        // Chỉ chạy logic di chuyển khi đã hoàn tất khởi tạo initObstacle và chưa nổ
-        if (!this.isInitialized || !this.gameCtrl || this.isExploding) return;
+        if (!this.gameCtrl || this.isExploding) return;
 
         const paddle = this.gameCtrl.paddle;
         if (!paddle) return;
@@ -82,38 +81,82 @@ export class ObstacleItemCtrl extends Component {
         const oldPos = this.node.position.clone();
         const newPos = oldPos.clone();
 
-        // 1. Logic bám đuổi Paddle theo trục X khi đến gần
+        // --- BƯỚC 1: ĐỊNH VỊ BIÊN CỦA CỤM GẠCH ĐỂ NÉ THÔNG MINH ---
+        let isInsideBrickZoneX = true;
+        let isAboveBrickBottomY = true;
+
+        if (this.brickContainer && this.brickContainer.children.length > 0) {
+            const bricks = this.brickContainer.children;
+            
+            // Tìm viên gạch nằm ngoài cùng bên trái, bên phải và viên thấp nhất
+            let minBrickX = 9999;
+            let maxBrickX = -9999;
+            let minBrickY = 9999;
+
+            for (let i = 0; i < bricks.length; i++) {
+                const bPos = bricks[i].position;
+                if (bPos.x < minBrickX) minBrickX = bPos.x;
+                if (bPos.x > maxBrickX) maxBrickX = bPos.x;
+                if (bPos.y < minBrickY) minBrickY = bPos.y;
+            }
+
+            // Cộng thêm khoảng trừ hao (ví dụ 40px) kích thước viên gạch
+            minBrickX -= 40;
+            maxBrickX += 40;
+            minBrickY -= 20;
+
+            // Kiểm tra xem quái vật có đang nằm trong phạm vi ngang của tháp gạch không
+            isInsideBrickZoneX = (oldPos.x >= minBrickX && oldPos.x <= maxBrickX);
+            // Kiểm tra xem quái vật đã rơi vượt qua khỏi đáy gạch thấp nhất chưa
+            isAboveBrickBottomY = (oldPos.y >= minBrickY);
+        }
+
+        // --- BƯỚC 2: LOGIC BÁM ĐUỔI PADDLE (CHỈ BẬT KHI AN TOÀN) ---
         const shouldChasePaddle = oldPos.y <= paddle.position.y + this.chaseStartOffsetFromPaddle;
-        if (shouldChasePaddle) {
+        
+        const canStartChasing = !isAboveBrickBottomY || !isInsideBrickZoneX;
+
+        if (shouldChasePaddle && canStartChasing) {
             const diffX = paddle.position.x - oldPos.x;
             const maxMoveX = this.chaseSpeed * dt;
             newPos.x += Physics2DHelper.clamp(diffX, -maxMoveX, maxMoveX);
         }
 
-        // 2. Logic rơi tự do kết hợp lắc lư (Swaying) sinh động
+        // --- BƯỚC 3: TÍNH TOÁN HƯỚNG RƠI TỰ DO VÀ LẮC LƯ MẶC ĐỊNH ---
         this.swayTime += dt;
-        newPos.y -= this.fallSpeed * dt;
-        newPos.x += Math.sin(this.swayTime * 2.4 + this.swaySeed) * 18 * dt;
+        
+        let targetY = oldPos.y - this.fallSpeed * dt;
+        
+        if (this.avoidDir === 0) {
+            newPos.x += Math.sin(this.swayTime * 2.4 + this.swaySeed) * 18 * dt;
+        }
         newPos.x = Physics2DHelper.clamp(newPos.x, this.leftLimit, this.rightLimit);
 
-        // Áp góc nghiêng nhẹ cho thân quái vật khi lướt sóng qua lại
         this.node.angle = Math.sin(this.swayTime * 3.2 + this.swaySeed) * 4;
-        this.node.setPosition(newPos);
 
-        // 3. Logic kiểm tra va chạm để né tránh gạch (Bricks)
+
+        // --- BƯỚC 4: LOGIC QUÉT VÀ NÉ TRÁNH GẠCH (LƯỢN NGANG DỌC VUÔNG GÓC) ---
         if (this.isTouchingAnyBrick()) {
             if (this.avoidDir === 0) {
-                this.avoidDir = paddle.position.x >= oldPos.x ? 1 : -1;
+                this.avoidDir = oldPos.x >= 0 ? 1 : -1;
             }
+            
             const sideStep = this.avoidSpeed * dt;
             const resolvedX = oldPos.x + this.avoidDir * sideStep;
             newPos.x = Physics2DHelper.clamp(resolvedX, this.leftLimit, this.rightLimit);
-            this.node.setPosition(newPos.x, oldPos.y, 0); // Giữ Y cũ, chỉ lách né X
+            
+            this.node.setPosition(newPos.x, oldPos.y, 0); 
+            
         } else {
+            // ✅ ĐÃ THOÁT GẠCH: Tắt chế độ đi ngang, trả lại quyền rơi dọc xuống
             this.avoidDir = 0;
+            
+            // Cho phép quái vật cập nhật tọa độ Y mới để tiếp tục lao xuống dưới
+            newPos.y = targetY;
+            this.node.setPosition(newPos.x, newPos.y, 0);
         }
 
-        // 4. Quét va chạm với Paddle người chơi
+        // --- BƯỚC 5: VA CHẠM PADDLE VÀ TỰ HỦY ---
         if (Physics2DHelper.isRectHit(this.node, paddle)) {
             this.explodeAndDestroy();
             if (this.gameCtrl.playPaddleHitEffect) {
@@ -122,7 +165,6 @@ export class ObstacleItemCtrl extends Component {
             return;
         }
 
-        // 5. Tự hủy khi rơi lọt đáy màn hình
         if (this.node.position.y < this.bottomLimit) {
             this.node.destroy();
         }

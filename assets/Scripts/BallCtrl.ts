@@ -27,7 +27,7 @@ export class BallCtrl extends Component {
     private maxPlayY: number = 0;
     private minPlayY: number = 0;
     private trailTimer: number = 0;
-    private readonly trailInterval: number = 0.035;
+    private readonly trailInterval: number = 0.025;
 
     private gameCtrl: any = null;
 
@@ -86,56 +86,61 @@ export class BallCtrl extends Component {
 
         if (this.isLaunched) {
             this.simulatePhysics(dt);
-            // this.updateBallTrail(dt);
+            this.updateBallTrail(dt);
         }
     }
 
-    // private updateBallTrail(dt: number) {
-    //     this.trailTimer += dt;
+    private updateBallTrail(dt: number) {
+        this.trailTimer += dt;
 
-    //     if (this.trailTimer >= this.trailInterval) {
-    //         this.trailTimer = 0;
-    //         this.createSingleTrailGhost();
-    //     }
-    // }
+        if (this.trailTimer >= this.trailInterval) {
+            this.trailTimer = 0;
+            this.createSingleTrailGhost();
+        }
+    }
 
-    // private createSingleTrailGhost() {
-    //     const mySprite = this.getComponent(Sprite);
-    //     const myUI = this.getComponent(UITransform);
+    private createSingleTrailGhost() {
+        const mySprite = this.getComponent(Sprite);
+        const myUI = this.getComponent(UITransform);
 
-    //     if (!mySprite || !mySprite.spriteFrame || !myUI || !this.node.parent) return;
+        if (!mySprite || !mySprite.spriteFrame || !myUI || !this.node.parent) return;
 
-    //     const trailNode = new Node('BallBlurGhost');
-    //     trailNode.parent = this.node.parent;
+        const trailNode = new Node('BallBlurGhost');
         
-    //     trailNode.setSiblingIndex(0); 
+        trailNode.parent = this.node.parent;
         
-    //     trailNode.setPosition(this.node.position.clone());
-    //     trailNode.setScale(this.node.scale.clone());
+        // Đẩy bóng mờ xuống dưới cùng danh sách con để bóng thật đè lên trên
+        const currentBallIndex = this.node.getSiblingIndex();
+        trailNode.setSiblingIndex(currentBallIndex > 0 ? currentBallIndex - 1 : 0); 
+        
+        // Đồng bộ vị trí, góc xoay và kích thước
+        trailNode.setPosition(this.node.position.clone());
+        trailNode.setScale(this.node.scale.clone());
 
-    //     const trailUI = trailNode.addComponent(UITransform);
-    //     trailUI.setContentSize(myUI.contentSize);
+        const trailUI = trailNode.addComponent(UITransform);
+        trailUI.setContentSize(myUI.contentSize);
 
-    //     const trailSprite = trailNode.addComponent(Sprite);
-    //     trailSprite.spriteFrame = mySprite.spriteFrame;
-    //     trailSprite.color = new Color(120, 220, 255, 180); 
+        const trailSprite = trailNode.addComponent(Sprite);
+        trailSprite.spriteFrame = mySprite.spriteFrame;
+        
+        trailSprite.color = new Color(140, 230, 255, 255); 
 
-    //     const opacityComp = trailNode.addComponent(UIOpacity);
-    //     opacityComp.opacity = 150;
+        const opacityComp = trailNode.addComponent(UIOpacity);
+        opacityComp.opacity = 200; 
 
-    //     tween(trailNode)
-    //         .to(0.22, { scale: new Vec3(this.node.scale.x * 0.45, this.node.scale.y * 0.45, 1) })
-    //         .start();
+        tween(trailNode)
+            .to(0.08, { scale: new Vec3(this.node.scale.x * 0.3, this.node.scale.y * 0.3, 1) })
+            .start();
 
-    //     tween(opacityComp)
-    //         .to(0.22, { opacity: 0 })
-    //         .call(() => {
-    //             if (trailNode && trailNode.isValid) {
-    //                 trailNode.destroy();
-    //             }
-    //         })
-    //         .start();
-    // }
+        tween(opacityComp)
+            .to(0.08, { opacity: 0 })
+            .call(() => {
+                if (trailNode && trailNode.isValid) {
+                    trailNode.destroy(); 
+                }
+            })
+            .start();
+    }
 
     private simulatePhysics(dt: number) {
         const speed = this.velocity.length();
@@ -210,6 +215,10 @@ export class BallCtrl extends Component {
 
             if (this.gameCtrl) {
                 this.gameCtrl.playSound(this.gameCtrl.sndPaddleHit);
+            }
+
+            if (this.gameCtrl && this.gameCtrl.playPaddleHitEffect) {
+                this.gameCtrl.playPaddleHitEffect();
             }
             
             // Đẩy bóng lên đỉnh thanh paddle ngay lập tức để tránh dính đúp va chạm

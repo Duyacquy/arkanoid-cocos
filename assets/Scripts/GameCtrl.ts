@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AudioClip, AudioSource } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AudioClip, AudioSource, SpriteFrame, Sprite } from 'cc';
 import { BallCtrl } from './BallCtrl';
 import { PowerUpType } from './PowerUpCtrl';
 import { LevelManager } from './LevelManager';
@@ -45,6 +45,12 @@ export class GameCtrl extends Component {
 
     @property(BallCtrl)
     public ballCtrl: BallCtrl = null!;
+
+    @property(SpriteFrame)
+    public ballNormalFrame: SpriteFrame = null!; 
+
+    @property(SpriteFrame)
+    public ballSlowFrame: SpriteFrame = null!;
 
     @property(Prefab)
     public laserBulletPrefab: Prefab = null!;
@@ -93,7 +99,7 @@ export class GameCtrl extends Component {
 
     private obstaclesList: Node[] = [];
     private obstacleTimer: number = 0;
-    private readonly obstacleInterval: number = 20;
+    private readonly obstacleInterval: number = 18;
 
     private activeBalls: Node[] = [];
     private isPlaying: boolean = true;
@@ -297,7 +303,10 @@ export class GameCtrl extends Component {
                 if (!this.isBallSlowed) {
                     this.isBallSlowed = true;
                     PowerUpManager.handleSlowBalls(this.activeBalls, this.ballSlowScale); 
-                    console.log("Bóng bắt đầu chạy chậm.");
+                    
+                    this.changeAllBallsSpriteFrame(this.ballSlowFrame);
+                    
+                    console.log("Bóng bắt đầu chạy chậm và đổi sang màu xanh.");
                 }
         
                 this.unschedule(this.resetBallSpeed);
@@ -306,7 +315,9 @@ export class GameCtrl extends Component {
                         this.refreshActiveBalls();
                         PowerUpManager.handleSlowBalls(this.activeBalls, 1.0 / this.ballSlowScale);
                         this.isBallSlowed = false; 
-                        console.log("Hết thời gian làm chậm! Bóng tăng tốc trở lại.");
+                        
+                        this.changeAllBallsSpriteFrame(this.ballNormalFrame);
+                        
                     }
                 }, 10); 
                 break;
@@ -459,26 +470,43 @@ export class GameCtrl extends Component {
             this.ballCtrl.resetBall();
         }
 
+        if (this.ballCtrl && this.ballCtrl.node.parent) {
+            const allChildren = this.ballCtrl.node.parent.children;
+            for (let i = allChildren.length - 1; i >= 0; i--) {
+                const child = allChildren[i];
+                if (child !== this.ballCtrl.node && child.name.includes("Ball")) {
+                    child.destroy();
+                }
+            }
+        }
+        this.activeBalls = [];
+
+        for (let i = 0; i < this.obstaclesList.length; i++) {
+            if (this.obstaclesList[i] && this.obstaclesList[i].isValid) {
+                this.obstaclesList[i].destroy();
+            }
+        }
+        this.obstaclesList = [];
+        this.obstacleTimer = 0;
+
+        this.unscheduleAllCallbacks();
+
         if (this.resultPanel) {
             this.resultPanel.active = true;
-
             this.resultPanel.setScale(new Vec3(0, 0, 1));
 
-            this.playSound(this.sndGameOver);
-
-            if (this.panelTitleLabel) {
-                if (isWin) {
-                    this.panelTitleLabel.string = "VICTORY";
-                } else {
-                    this.panelTitleLabel.string = "GAME OVER";
-                }
+            if (isWin) {
+                if (this.panelTitleLabel) this.panelTitleLabel.string = "VICTORY";
+                this.playSound(this.sndRoundStart); 
+            } else {
+                if (this.panelTitleLabel) this.panelTitleLabel.string = "GAME OVER";
+                this.playSound(this.sndGameOver); 
             }
 
             if (this.panelScoreLabel) {
                 this.panelScoreLabel.string = `SCORE\n${this.currentScore}`;
             }
 
-            // Bước D: Chạy hiệu ứng Tween Pop-up (Phóng to kết hợp hiệu ứng Đàn hồi nhẹ)
             tween(this.resultPanel)
                 .to(0.15, { scale: new Vec3(1.1, 1.1, 1) }, { easing: 'quadOut' }) 
                 .to(0.08, { scale: new Vec3(1, 1, 1) }, { easing: 'quadIn' })  
@@ -491,6 +519,7 @@ export class GameCtrl extends Component {
 
         this.currentScore = 0;
         this.lives = 3;
+        this.isBallSlowed = false;
         this.isPlaying = true;
         this.isDying = false;
 
@@ -519,6 +548,9 @@ export class GameCtrl extends Component {
             this.levelManager.generateLevel(); 
         }
 
+        const sprite = this.ballCtrl.node.getComponent(Sprite);
+        if (sprite && this.ballNormalFrame) sprite.spriteFrame = this.ballNormalFrame;
+
         this.respawnPaddleAndBall();
     }
 
@@ -533,9 +565,28 @@ export class GameCtrl extends Component {
 
         this.ballCtrl.node.active = true;
         this.ballCtrl.resetBall();
-        this.activeBalls.push(this.ballCtrl.node);
 
+        const sprite = this.ballCtrl.node.getComponent(Sprite);
+        if (sprite && this.ballNormalFrame) sprite.spriteFrame = this.ballNormalFrame;
+
+        this.activeBalls.push(this.ballCtrl.node);
         this.playPaddleIntroSequence();
+    }
+
+    private changeAllBallsSpriteFrame(targetFrame: SpriteFrame) {
+        if (!targetFrame) return;
+
+        this.refreshActiveBalls();
+        
+        for (let i = 0; i < this.activeBalls.length; i++) {
+            const ballNode = this.activeBalls[i];
+            if (ballNode && ballNode.isValid) {
+                const sprite = ballNode.getComponent(Sprite);
+                if (sprite) {
+                    sprite.spriteFrame = targetFrame;
+                }
+            }
+        }
     }
 
     public updatePaddleBounds(currentPaddleWidth: number) {
@@ -578,7 +629,6 @@ export class GameCtrl extends Component {
 
                     // 2. Lắng nghe sự kiện khi animation mở cửa kết thúc để tự động đóng lại
                     anim.once(Animation.EventType.FINISHED, () => {
-                        // Đợi 0.1s sau khi mở hết cỡ rồi đóng lại cho mượt mà
                         this.scheduleOnce(() => {
                             if (anim.getState(closeAnimName)) {
                                 anim.play(closeAnimName);
@@ -677,5 +727,21 @@ export class GameCtrl extends Component {
             .to(0.06, { scale: new Vec3(1.12, 0.82, 1) })
             .to(0.08, { scale: new Vec3(1, 1, 1) })
             .start();
+    }
+
+    public checkVictory() {
+        if (!this.isPlaying || this.isDying) return;
+
+        this.scheduleOnce(() => {
+            if (!this.isPlaying || this.isDying) return;
+
+            if (this.levelManager && this.levelManager.brickContainer) {
+                const remainingBricks = this.levelManager.brickContainer.children.length;
+                
+                if (remainingBricks === 0) {
+                    this.gameOver(true);
+                }
+            }
+        }, 0);
     }
 }
