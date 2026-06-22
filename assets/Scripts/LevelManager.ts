@@ -78,7 +78,7 @@ export class LevelManager extends Component {
             
             const topEdge = zoneHeight / 2;
             
-            const marginTop = 180; 
+            const marginTop = 130; 
             
             startY = topEdge - marginTop - this.brickHeight / 2;
         } else {

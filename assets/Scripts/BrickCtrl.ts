@@ -75,7 +75,7 @@ export class BrickCtrl extends Component {
     }
 
     private spawnPowerUp() {
-        if (Math.random() > 0.1) return;
+        if (Math.random() > 0.9) return;
         if (!this.powerUpPrefab || !this.node.parent) return;
 
         if (this.gameCtrl.refreshActiveBalls) {

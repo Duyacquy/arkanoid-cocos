@@ -16,7 +16,7 @@ export class BallCtrl extends Component {
     public ballSpeed: number = 500;
 
     private isLaunched: boolean = false;
-    private offsetFromPaddle: Vec3 = new Vec3(0, 35, 0);
+    private offsetFromPaddle: Vec3 = new Vec3(0, 30, 0);
     
     // Core Physics Properties
     private velocity: Vec3 = new Vec3(0, 0, 0);
