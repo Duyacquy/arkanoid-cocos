@@ -1,6 +1,6 @@
-import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AudioClip, AudioSource, SpriteFrame, Sprite } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, Prefab, instantiate, UITransform, Animation, Label, sys, tween, AudioClip, AudioSource, SpriteFrame, Sprite, UIOpacity } from 'cc';
 import { BallCtrl } from './BallCtrl';
-import { PowerUpType } from './PowerUpCtrl';
+import { PowerUpType, PowerUpCtrl } from './PowerUpCtrl';
 import { LevelManager } from './LevelManager';
 import { PowerUpManager } from './PowerUpManager';
 import { ObstacleItemCtrl } from './ObstacleItemCtrl';
@@ -33,6 +33,9 @@ export class GameCtrl extends Component {
 
     @property(AudioClip)
     public sndPowerUpReceived: AudioClip = null!;
+
+    @property(Node)
+    public startButton: Node = null!;
 
     @property(Node)
     public paddle: Node = null!;
@@ -102,15 +105,15 @@ export class GameCtrl extends Component {
     private readonly obstacleInterval: number = 18;
 
     private activeBalls: Node[] = [];
-    private isPlaying: boolean = true;
+    private isPlaying: boolean = false;
     private lives: number = 3;
     private isDying: boolean = false;
 
     private currentPaddleMode: 'NONE' | 'EXPAND' | 'LASER' = 'NONE';
     private paddleBuffToken: number = 0; 
 
-    private normalPaddleWidth: number = 180;
-    private extendedPaddleWidth: number = 240; 
+    private normalPaddleWidth: number = 160;
+    private extendedPaddleWidth: number = 210; 
 
     private ballSlowScale: number = 0.7;
     private ballSlowToken: number = 0;
@@ -140,9 +143,23 @@ export class GameCtrl extends Component {
             this.resultPanel.active = false;
         }
 
-        // Lắng nghe sự kiện click bằng mã code từ node bấm
         if (this.playAgainButton) {
             this.playAgainButton.on(Node.EventType.TOUCH_END, this.onClickPlayAgain, this);
+        }
+
+        if (this.startButton) {
+            this.startButton.active = true; 
+            this.startButton.on(Node.EventType.TOUCH_END, this.onClickStartGame, this);
+
+            this.startButton.setScale(new Vec3(1, 1, 1));
+
+            tween(this.startButton)
+                .repeatForever(
+                    tween()
+                        .to(0.6, { scale: new Vec3(1.05, 1.05, 1) }, { easing: 'quadOut' })  
+                        .to(0.6, { scale: new Vec3(0.95, 0.95, 1) }, { easing: 'quadIn' }) 
+                )
+                .start();
         }
 
         if (this.ballCtrl) {
@@ -158,7 +175,6 @@ export class GameCtrl extends Component {
         }
         
         this.calculateResponsiveBounds();
-        this.playPaddleIntroSequence();
 
         this.lives = 3;
         this.isDying = false;
@@ -167,8 +183,26 @@ export class GameCtrl extends Component {
         this.obstaclesList = [];
         this.obstacleTimer = 0;
 
+        if (this.ballCtrl) this.ballCtrl.resetBall();
+    }
+
+    /** Hàm kích hoạt trận đấu khi người chơi bấm nút START */
+    public onClickStartGame() {
+        if (this.isPlaying) return;
+
+        if (this.startButton) {
+            this.startButton.active = false;
+        }
+
+        this.isPlaying = true;
+        this.isDying = false;
+
         this.playSound(this.sndRoundStart);
+
         this.playPaddleIntroSequence();
+        if (this.ballCtrl) {
+            this.ballCtrl.resetBall();
+        }
     }
 
     private playPaddleIntroSequence() {
@@ -434,8 +468,55 @@ export class GameCtrl extends Component {
             
             this.playSound(this.sndBallLoss);
 
+            if (this.ballCtrl && this.ballCtrl.node && this.ballCtrl.node.parent) {
+                // Nhắm thẳng vào nhóm GameplayGroup (Node cha trực tiếp của bóng)
+                const gameplayGroup = this.ballCtrl.node.parent; 
+                const playZoneChildren = gameplayGroup.children;
+                
+                // Duyệt ngược mảng để thực hiện lệnh destroy an toàn, tránh sót Node
+                for (let i = playZoneChildren.length - 1; i >= 0; i--) {
+                    const child = playZoneChildren[i];
+                    if (child && child.isValid) {
+                        
+                        // Radar 1: Quét bằng tên (Ép về chữ thường để tránh lỗi phân biệt Hoa/Thường)
+                        const lowerName = child.name.toLowerCase();
+                        const isPowerUpByName = lowerName.includes("powerup") || lowerName.includes("item");
+                        
+                        // Radar 2: Quét bằng Component điều khiển (Bảo hiểm chính xác 100%)
+                        const hasPowerUpCtrl = child.getComponent(PowerUpCtrl);
+
+                        // Nếu trúng mục tiêu, tiến hành bốc hơi ngay lập tức
+                        if (hasPowerUpCtrl || isPowerUpByName) {
+                            let opacityComp = child.getComponent(UIOpacity);
+                            if (!opacityComp) {
+                                opacityComp = child.addComponent(UIOpacity);
+                            }
+
+                            const fadeTime = 0.5;
+                            
+                            tween(opacityComp)
+                                .to(fadeTime, { opacity: 0 }, { easing: 'quadOut' })
+                                .start();
+
+                            tween(child)
+                                .to(fadeTime, { scale: new Vec3(0, 0, 1) }, { easing: 'quadOut' })
+                                .call(() => {
+                                    if (child && child.isValid) {
+                                        child.destroy();
+                                    }
+                                })
+                                .start();
+                        }
+                    }
+                }
+            }
+
+            // Hủy toàn bộ buff trạng thái hiện tại để mạng mới reset hoàn toàn
             this.currentPaddleMode = 'NONE';
             this.paddleBuffToken++;
+            this.ballSlowToken++;
+            this.isBallSlowed = false;
+            this.unschedule(this.resetBallSpeed);
     
             const anim = this.paddle.getComponent(Animation);
             if (anim) {
@@ -517,9 +598,49 @@ export class GameCtrl extends Component {
     public onClickPlayAgain() {
         this.playSound(this.sndRoundStart);
 
+        // ========================================================
+        // DỌN SẠCH TẬN GỐC TOÀN BỘ HIỆU ỨNG (POWER-UPS RESET)
+        // ========================================================
+
+        // 1. DỌN GỐC HIỆU ỨNG: LASER
+        if (this.currentPaddleMode === 'LASER') {
+            PowerUpManager.handleDisableLaser(this.paddle);
+        }
+        this.laserFireTimer = 0;
+
+        // 2. EXPAND (Phóng to Paddle)
+        PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
+            this.updatePaddleBounds(width);
+        });
+        const paddleAnim = this.paddle.getComponent(Animation);
+        if (paddleAnim) paddleAnim.play('PaddlePulsate'); // Trả về hiệu ứng hoạt họa mặc định
+
+        // 3. DỌN GỐC HIỆU ỨNG: SLOW (Làm chậm bóng)
+        this.isBallSlowed = false;
+        this.unschedule(this.resetBallSpeed); 
+
+        // 4. RESET TOKENS BẢO VỆ
+        this.paddleBuffToken++;
+        this.ballSlowToken++;
+
+        // 5. DỌN GỐC HIỆU ỨNG: DUPLICATE (Phân thân bóng)
+        if (this.ballCtrl && this.ballCtrl.node.parent) {
+            const allChildren = this.ballCtrl.node.parent.children;
+            for (let i = allChildren.length - 1; i >= 0; i--) {
+                const child = allChildren[i];
+                if (child !== this.ballCtrl.node && child.name.includes("Ball")) {
+                    child.destroy();
+                }
+            }
+        }
+        this.activeBalls = []; 
+        this.currentPaddleMode = 'NONE';
+
+        // ========================================================
+        // KHỞI TẠO LẠI CÁC THÔNG SỐ TRẬN ĐẤU MỚI
+        // ========================================================
         this.currentScore = 0;
         this.lives = 3;
-        this.isBallSlowed = false;
         this.isPlaying = true;
         this.isDying = false;
 
@@ -549,7 +670,9 @@ export class GameCtrl extends Component {
         }
 
         const sprite = this.ballCtrl.node.getComponent(Sprite);
-        if (sprite && this.ballNormalFrame) sprite.spriteFrame = this.ballNormalFrame;
+        if (sprite && this.ballNormalFrame) {
+            sprite.spriteFrame = this.ballNormalFrame;
+        }
 
         this.respawnPaddleAndBall();
     }
@@ -560,8 +683,6 @@ export class GameCtrl extends Component {
         PowerUpManager.handleExpandPaddle(this.paddle, this.normalPaddleWidth, (width) => {
             this.updatePaddleBounds(width);
         });
-
-        this.playSound(this.sndRoundStart);
 
         this.ballCtrl.node.active = true;
         this.ballCtrl.resetBall();
